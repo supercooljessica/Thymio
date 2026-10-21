@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Talk to a Thymio (real or simulated) through Thymio Suite's device manager.
 
-Thymio Suite must be open. Run from the repo folder:
+Thymio Suite must be open. Run it through the launcher in the repo folder:
+"thymio" on Windows (".\\thymio" in PowerShell), "./thymio.sh" on macOS/Linux.
 
-  .venv/bin/python tools/thymio.py list
-  .venv/bin/python tools/thymio.py load thymio_hunter.aesl
-  .venv/bin/python tools/thymio.py stop
-  .venv/bin/python tools/thymio.py read prox.horizontal state
-  .venv/bin/python tools/thymio.py watch prox.horizontal state --seconds 5
-  .venv/bin/python tools/thymio.py set detect_threshold=800 leds.top=0,32,0
+  thymio list
+  thymio load thymio_hunter.aesl
+  thymio stop
+  thymio read prox.horizontal state
+  thymio watch prox.horizontal state --seconds 5
+  thymio set detect_threshold=800 leds.top=0,32,0
 
 With several robots connected, pick one with --robot and part of its name,
 e.g. --robot "Thymio II 0". Only one program can control a robot at a time,
@@ -28,7 +29,7 @@ STATUS_NAMES = {0: "unknown", 1: "connected", 2: "available", 3: "busy",
 
 def read_program(path):
     """Aseba source from an .aesl file (Aseba Studio) or a plain .aseba file."""
-    if not path.endswith(".aesl"):
+    if not path.lower().endswith(".aesl"):
         with open(path) as f:
             return f.read()
     root = ET.parse(path).getroot()
@@ -147,4 +148,7 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:  # Ctrl+C during watch
+        sys.exit(130)
