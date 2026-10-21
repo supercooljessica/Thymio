@@ -26,12 +26,13 @@
 var detect_threshold = 700
 var retain_threshold = 500
 var close_threshold = 2500   # Calibrate at a 50 mm body-to-body gap
-var warning_threshold = 2000
-var hard_threshold = 4000    # Immediate override at ANY sensor
-var flank_threshold = 2600
-var rise_threshold = 250     # Raw IR increase per fresh sample
+var warning_threshold = 2800
+var hard_threshold = 4800    # Immediate override at ANY sensor
+var flank_threshold = 3600
+var rise_threshold = 350     # Raw IR increase per fresh sample
 var lateral_tolerance = 35   # Bearing change allowed before treating as crossing
-var rear_clear_threshold = 450
+var avoid_clear_threshold = 2200  # Release AVOID before every wall leaves sensor range
+var rear_clear_threshold = 900
 var nudge_threshold = 2100
 var search_speed = 220
 var pursue_speed = 330
@@ -146,7 +147,7 @@ for i in 0:6 do
     if r[i] &lt; detect_threshold then
         all_blocked = 0
     end
-    if r[i] >= retain_threshold then
+    if r[i] >= avoid_clear_threshold then
         all_clear = 0
     end
     if i &lt; 5 then
@@ -271,9 +272,9 @@ if hazard == 1 and state != 4 then
     age = 0
     clear_count = 0
 end
-# Rear danger gets a latched FORWARD escape when all front beams are clear.
+# Rear danger gets a latched FORWARD escape when the front gap is open.
 # Do not restart its age on every sample of the same rear threat.
-if state == 4 and phase != 2 and rear_threat == 1 and peak &lt; retain_threshold then
+if state == 4 and phase != 2 and rear_threat == 1 and nose &lt; avoid_clear_threshold and r[0] &lt; flank_threshold and r[4] &lt; flank_threshold then
     phase = 2
     age = 0
     clear_count = 0
@@ -402,7 +403,7 @@ elseif state == 3 then
     end
 
 else
-    # AVOID phases: 0 find an exit; 1 reverse; 2 forward from rear danger.
+    # AVOID phases: 0 find an exit; 1 reverse; 2 move through a clear front gap.
     call leds.top(32,0,0)
     if all_clear == 1 then
         clear_count += 1
@@ -410,15 +411,15 @@ else
         clear_count = 0
     end
     if phase == 2 then
-        # Keep escaping a pursuer behind us, while checking ALL front beams.
-        if peak >= retain_threshold then
+        # Move forward only while the central path and both flanks stay open.
+        if nose >= avoid_clear_threshold or r[0] >= flank_threshold or r[4] >= flank_threshold then
             # Stop now; reassess an alternative exit next sample.
             phase = 0
             age = 0
         elseif clear_count >= 3 and age >= 5 then
             callsub reset_search
         else
-            drive = escape_speed
+            drive = search_speed
             if age >= 300 then
                 age = 5
             end
@@ -435,10 +436,17 @@ else
             drive = -reverse_speed
         end
     else
-        if rear_clear >= 2 then
+        if clear_count >= 3 and age >= 5 then
+            callsub reset_search
+        elseif rear_clear >= 2 then
             phase = 1
             age = 0
             drive = -reverse_speed
+        elseif nose &lt; avoid_clear_threshold and r[0] &lt; flank_threshold and r[4] &lt; flank_threshold then
+            # A nearby wall behind us should not trap us in a stationary spin.
+            phase = 2
+            age = 0
+            drive = search_speed
         else
             # Turn toward the less obstructed sensed side.
             turn = avoid_spin_speed
