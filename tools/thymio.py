@@ -115,7 +115,15 @@ def main():
             node = await find_node(client, args.robot)
 
             if args.command in ("read", "watch"):
-                await node.wait_for_variables(set(args.names))
+                await node.watch(variables=True)
+                for _ in range(30):  # up to 3 s for the values to arrive
+                    missing = set(args.names) - set(node.var)
+                    if not missing:
+                        break
+                    await client.sleep(0.1)
+                if missing:
+                    sys.exit(f"Not found on this robot: {', '.join(sorted(missing))}. "
+                             "Is the program that defines it loaded?")
                 show(node, args.names)
                 if args.command == "watch":
                     for _ in range(int(args.seconds / args.every)):
@@ -152,3 +160,6 @@ if __name__ == "__main__":
         sys.exit(main())
     except KeyboardInterrupt:  # Ctrl+C during watch
         sys.exit(130)
+    except ConnectionRefusedError:
+        sys.exit("Can't reach Thymio Suite. Open it, start the simulator or plug in "
+                 "the robot, then try again.")
