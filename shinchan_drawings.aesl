@@ -1,0 +1,77 @@
+<!DOCTYPE aesl-source>
+<network>
+<keywords flag="true"/>
+<node nodeId="1" name="thymio-II"><![CDATA[var t90 = 1244
+var cm = 167
+var pan[6] = [120, 40, 0, 25, 0, 40]
+var n
+var s
+var l
+var r
+var d
+
+motor.left.target = 0
+motor.right.target = 0
+timer.period[0] = 0
+
+sub go
+s = 0
+motor.left.target = 0
+motor.right.target = 0
+timer.period[0] = 1000
+
+onevent button.forward
+n = 200
+callsub go
+
+onevent button.left
+n = 20
+callsub go
+
+onevent button.right
+n = 12
+callsub go
+
+onevent button.center
+n = 0
+callsub go
+
+onevent timer0
+l = 0
+r = 0
+d = 0
+if s < n then
+	if n > 20 then
+		l = 400
+		r = s * 3 - 400
+		d = 100
+	elseif n == 20 then
+		r = 150
+		d = t90 * 2
+		if s % 2 == 1 then
+			l = -150
+			d = t90
+			if s % 4 == 3 then
+				d = t90 * 9 / 5
+			end
+		end
+	else
+		l = 150
+		r = -150
+		d = t90
+		if s % 2 == 0 then
+			r = 150
+			d = pan[s / 2] * cm / 10
+			if d == 0 then
+				l = 0
+				d = t90 * 2
+			end
+		end
+	end
+end
+motor.left.target = l
+motor.right.target = r
+timer.period[0] = d
+s += 1
+]]></node>
+</network>

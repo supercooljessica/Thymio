@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="2000" viewBox="0 0 2000 2000" font-family="Helvetica, Arial, sans-serif">
+<rect width="2000" height="2000" fill="#ffffff"/>
+<line x1="0" y1="0" x2="0" y2="2000" stroke="#d9d9d9" stroke-width="4"/><line x1="0" y1="0" x2="2000" y2="0" stroke="#d9d9d9" stroke-width="4"/>
+<line x1="100" y1="0" x2="100" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="100" x2="2000" y2="100" stroke="#efefef" stroke-width="2"/>
+<line x1="200" y1="0" x2="200" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="200" x2="2000" y2="200" stroke="#efefef" stroke-width="2"/>
+<line x1="300" y1="0" x2="300" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="300" x2="2000" y2="300" stroke="#efefef" stroke-width="2"/>
+<line x1="400" y1="0" x2="400" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="400" x2="2000" y2="400" stroke="#efefef" stroke-width="2"/>
+<line x1="500" y1="0" x2="500" y2="2000" stroke="#d9d9d9" stroke-width="4"/><line x1="0" y1="500" x2="2000" y2="500" stroke="#d9d9d9" stroke-width="4"/>
+<line x1="600" y1="0" x2="600" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="600" x2="2000" y2="600" stroke="#efefef" stroke-width="2"/>
+<line x1="700" y1="0" x2="700" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="700" x2="2000" y2="700" stroke="#efefef" stroke-width="2"/>
+<line x1="800" y1="0" x2="800" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="800" x2="2000" y2="800" stroke="#efefef" stroke-width="2"/>
+<line x1="900" y1="0" x2="900" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="900" x2="2000" y2="900" stroke="#efefef" stroke-width="2"/>
+<line x1="1000" y1="0" x2="1000" y2="2000" stroke="#d9d9d9" stroke-width="4"/><line x1="0" y1="1000" x2="2000" y2="1000" stroke="#d9d9d9" stroke-width="4"/>
+<line x1="1100" y1="0" x2="1100" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="1100" x2="2000" y2="1100" stroke="#efefef" stroke-width="2"/>
+<line x1="1200" y1="0" x2="1200" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="1200" x2="2000" y2="1200" stroke="#efefef" stroke-width="2"/>
+<line x1="1300" y1="0" x2="1300" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="1300" x2="2000" y2="1300" stroke="#efefef" stroke-width="2"/>
+<line x1="1400" y1="0" x2="1400" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="1400" x2="2000" y2="1400" stroke="#efefef" stroke-width="2"/>
+<line x1="1500" y1="0" x2="1500" y2="2000" stroke="#d9d9d9" stroke-width="4"/><line x1="0" y1="1500" x2="2000" y2="1500" stroke="#d9d9d9" stroke-width="4"/>
+<line x1="1600" y1="0" x2="1600" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="1600" x2="2000" y2="1600" stroke="#efefef" stroke-width="2"/>
+<line x1="1700" y1="0" x2="1700" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="1700" x2="2000" y2="1700" stroke="#efefef" stroke-width="2"/>
+<line x1="1800" y1="0" x2="1800" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="1800" x2="2000" y2="1800" stroke="#efefef" stroke-width="2"/>
+<line x1="1900" y1="0" x2="1900" y2="2000" stroke="#efefef" stroke-width="2"/><line x1="0" y1="1900" x2="2000" y2="1900" stroke="#efefef" stroke-width="2"/>
+<line x1="2000" y1="0" x2="2000" y2="2000" stroke="#d9d9d9" stroke-width="4"/><line x1="0" y1="2000" x2="2000" y2="2000" stroke="#d9d9d9" stroke-width="4"/>
+<circle cx="500" cy="1500" r="165" fill="#fff1b8" stroke="#d4a017" stroke-width="5"/>
+<circle cx="500" cy="1500" r="125" fill="#ffd9f0" stroke="#c2259e" stroke-width="4"/>
+<circle cx="500" cy="1500" r="55" fill="#bdbdbd"/>
+<text x="500" y="1707" font-size="34" text-anchor="middle" fill="#8a6a00">sees it from 11 cm</text>
+<circle cx="1500" cy="1500" r="165" fill="#fff1b8" stroke="#d4a017" stroke-width="5"/>
+<circle cx="1500" cy="1500" r="125" fill="#ffd9f0" stroke="#c2259e" stroke-width="4"/>
+<circle cx="1500" cy="1500" r="55" fill="#bdbdbd"/>
+<text x="1500" y="1707" font-size="34" text-anchor="middle" fill="#8a6a00">sees it from 11 cm</text>
+<circle cx="500" cy="500" r="165" fill="#fff1b8" stroke="#d4a017" stroke-width="5"/>
+<circle cx="500" cy="500" r="125" fill="#ffd9f0" stroke="#c2259e" stroke-width="4"/>
+<circle cx="500" cy="500" r="55" fill="#bdbdbd"/>
+<text x="500" y="707" font-size="34" text-anchor="middle" fill="#8a6a00">sees it from 11 cm</text>
+<circle cx="1500" cy="500" r="165" fill="#fff1b8" stroke="#d4a017" stroke-width="5"/>
+<circle cx="1500" cy="500" r="125" fill="#ffd9f0" stroke="#c2259e" stroke-width="4"/>
+<circle cx="1500" cy="500" r="55" fill="#bdbdbd"/>
+<text x="1500" y="707" font-size="34" text-anchor="middle" fill="#8a6a00">sees it from 11 cm</text>
+<path d="M1057,1048 L1143,1146 A130,130 0 0 0 1169,1115 Z" fill="#22a046" fill-opacity="0.45" stroke="#22a046" stroke-width="3"/>
+<path d="M1070,1026 L1184,1089 A130,130 0 0 0 1198,1050 Z" fill="#22a046" fill-opacity="0.45" stroke="#22a046" stroke-width="3"/>
+<path d="M1075,1000 L1203,1020 A130,130 0 0 0 1203,980 Z" fill="#22a046" fill-opacity="0.45" stroke="#22a046" stroke-width="3"/>
+<path d="M1070,974 L1198,950 A130,130 0 0 0 1184,911 Z" fill="#22a046" fill-opacity="0.45" stroke="#22a046" stroke-width="3"/>
+<path d="M1057,952 L1169,885 A130,130 0 0 0 1143,854 Z" fill="#22a046" fill-opacity="0.45" stroke="#22a046" stroke-width="3"/>
+<path d="M970,1028 L842,1008 A130,130 0 0 0 842,1048 Z" fill="#22a046" fill-opacity="0.45" stroke="#22a046" stroke-width="3"/>
+<path d="M970,972 L842,952 A130,130 0 0 0 842,992 Z" fill="#22a046" fill-opacity="0.45" stroke="#22a046" stroke-width="3"/>
+<path d="M1102,1178 A205,205 0 0 0 1102,822" fill="none" stroke="#22a046" stroke-width="4" stroke-dasharray="14 8"/>
+<path d="M1072,1126 A145,145 0 0 0 1072,874" fill="none" stroke="#c2259e" stroke-width="4" stroke-dasharray="10 8"/>
+<text x="1221" y="1012" font-size="34" fill="#1b7a36">13 cm</text>
+<text x="1139" y="850" font-size="30" fill="#a01d82">taunts at 7 cm</text>
+<rect x="250" y="1750" width="1500" height="236" fill="#ffffff" stroke="#999" stroke-width="3"/>
+<rect x="280" y="1776" width="40" height="28" fill="#22a046" fill-opacity="0.6" stroke="#22a046" stroke-width="3"/><text x="336" y="1802" font-size="32">Hunter's 7 sensors, drawn at its start: each sees 13 cm</text>
+<rect x="280" y="1828" width="40" height="28" fill="#c2259e" fill-opacity="0.6" stroke="#c2259e" stroke-width="3"/><text x="336" y="1854" font-size="32">Inside pink: close enough to taunt (about 7 cm)</text>
+<rect x="280" y="1880" width="40" height="28" fill="#d4a017" fill-opacity="0.6" stroke="#d4a017" stroke-width="3"/><text x="336" y="1906" font-size="32">Hunter's nose inside yellow: it can see that cylinder (11 cm)</text>
+<rect x="280" y="1932" width="40" height="28" fill="#d9d9d9" fill-opacity="0.6" stroke="#d9d9d9" stroke-width="3"/><text x="336" y="1958" font-size="32">Grid: 10 cm squares</text>
+</svg>
