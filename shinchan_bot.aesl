@@ -1,0 +1,145 @@
+<!DOCTYPE aesl-source>
+<network>
+<keywords flag="true"/>
+<node nodeId="1" name="thymio-II"><![CDATA[var detect = 700
+var lost = 500
+var close = 2500
+var hard = 4000
+var clear = 1500
+var bored = 172
+var t90 = 1244
+var cm = 167
+var pan[6] = [120, 40, 0, 25, 0, 40]
+var state = 1
+var last = 0
+var age
+var fp
+var rr
+var mx
+var mn
+var mean
+var bearing
+var side
+var drive
+var turn
+var wavy
+var s
+var d
+var r
+var g
+var b
+
+onevent prox
+call math.stat(prox.horizontal[0:4], mn, fp, mean)
+call math.max(rr, prox.horizontal[5:5], prox.horizontal[6:6])
+call math.max(mx, fp, rr)
+bearing = (prox.horizontal[3] - prox.horizontal[1] + (prox.horizontal[4] - prox.horizontal[0]) * 2) / (mean / 20 + 1)
+if mx > hard then
+	if state == 2 then
+		state = 5
+	elseif state != 4 and (state != 5 or age >= 20) then
+		state = 4
+	end
+end
+if state != last then
+	last = state
+	age = 0
+	r = (state & 4) * 8
+	g = (state & 2) * 16
+	b = (state & 1) * 32
+	call leds.top(r, g, b)
+	call math.rand(wavy)
+end
+age += 1
+drive = 0
+turn = 0
+if state == 1 then
+	turn = (age & 16) * 20 - 160 + wavy % 16
+	drive = 200
+	if fp >= detect then
+		state = 2
+	elseif rr >= detect then
+		side = prox.horizontal[6] - prox.horizontal[5]
+		state = 6
+	elseif age >= bored then
+		state = 3
+		s = 0
+		timer.period[0] = 100
+	end
+elseif state == 3 then
+	if fp >= detect then
+		state = 2
+	end
+elseif state == 2 then
+	if fp < lost then
+		state = 6
+	else
+		side = bearing
+		turn = bearing
+		if wavy < 0 then
+			turn += (age & 8) * 50 - 200
+		end
+		drive = (close + 200 - fp) / 8 + age * 4
+		if drive > 400 then
+			drive = 400
+		end
+		if fp >= close then
+			state = 5
+		end
+	end
+elseif state == 6 then
+	turn = 180
+	if side < 0 then
+		turn = -180
+	end
+	if fp >= detect then
+		state = 2
+	elseif age >= 25 then
+		state = 1
+	end
+elseif state == 5 then
+	if age >= 40 then
+		state = 1
+	elseif age >= 20 then
+		drive = 300
+	elseif age >= 10 then
+		turn = 400
+	end
+else
+	turn = 150
+	if bearing > 0 then
+		turn = -150
+	end
+	drive = (rr - fp) / 14
+	if mx < clear and age >= 15 then
+		state = 1
+	end
+end
+if state != 3 then
+	motor.left.target = drive + turn
+	motor.right.target = drive - turn
+end
+
+onevent timer0
+if state == 3 and s < 12 then
+	motor.left.target = 150
+	motor.right.target = -150
+	d = t90
+	if s % 2 == 0 then
+		motor.right.target = 150
+		d = pan[s / 2] * cm / 10
+		if d == 0 then
+			motor.left.target = 0
+			d = t90 * 2
+		end
+	end
+	timer.period[0] = d
+	s += 1
+else
+	timer.period[0] = 0
+	if state == 3 then
+		state = 1
+	end
+end
+]]></node>
+</network>

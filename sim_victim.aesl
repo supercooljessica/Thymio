@@ -1,0 +1,23 @@
+<!DOCTYPE aesl-source>
+<network>
+<keywords flag="true"/>
+<node nodeId="1" name="thymio-II"><![CDATA[var age
+var fp
+var mn
+var mean
+var t
+
+onevent prox
+age += 1
+call math.stat(prox.horizontal[0:4], mn, fp, mean)
+t = (age & 64) - 32
+if fp > 1500 then
+	t = 200
+	if prox.horizontal[0] + prox.horizontal[1] < prox.horizontal[3] + prox.horizontal[4] then
+		t = -200
+	end
+end
+motor.left.target = 180 + t
+motor.right.target = 180 - t
+]]></node>
+</network>

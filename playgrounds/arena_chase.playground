@@ -1,0 +1,11 @@
+<!DOCTYPE aseba-playground>
+<aseba-playground>
+	<color name="wall" r="0.9" g="0.9" b="0.9" />
+	<world w="200" h="200" color="wall" groundTexture="arena_floor.png" />
+	<cylinder x="50" y="50" r="5.5" h="5" color="wall" />
+	<cylinder x="150" y="50" r="5.5" h="5" color="wall" />
+	<cylinder x="50" y="150" r="5.5" h="5" color="wall" />
+	<cylinder x="150" y="150" r="5.5" h="5" color="wall" />
+	<robot type="thymio2" x="100" y="100" angle="0" port="33333" name="shinchan" />
+	<robot type="thymio2" x="145" y="100" angle="0" port="33334" name="victim" />
+</aseba-playground>
