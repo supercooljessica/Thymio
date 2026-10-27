@@ -1,0 +1,14 @@
+<!DOCTYPE aesl-source>
+<network>
+<keywords flag="true"/>
+<node nodeId="31202" name="thymio-II"># Seven horizontal sensors: front 0..4 (left to right), rear 5..6.
+# The computer bridge watches this array over Thymio's USB connection.
+var sample[7] = [0,0,0,0,0,0,0]
+
+motor.left.target = 0
+motor.right.target = 0
+
+onevent prox
+sample = prox.horizontal
+</node>
+</network>

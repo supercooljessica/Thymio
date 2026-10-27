@@ -1,0 +1,88 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="31202" name="thymio-II">
+var wiggle_step = -1  # 0 through 4 are the five wiggle steps
+var wiggle_speed = 300
+var swerve_magnitude = 300
+var wiggle_step_time = 50
+var turn_time = 1200     # starting estimate for a 180-degree turn at full speed
+var shot_time = 1000
+var state = 0           # 0 idle, 1 wiggle, 2 turn, 3 straight shot
+timer.period[0] = 0
+
+sub rest
+	motor.left.target = 0
+	motor.right.target = 0
+	
+sub move_shy
+	if wiggle_step % 2 == 0 then
+		motor.left.target = -wiggle_speed - swerve_magnitude
+		motor.right.target = -wiggle_speed + swerve_magnitude
+	else
+		motor.left.target = -wiggle_speed + swerve_magnitude
+		motor.right.target = -wiggle_speed - swerve_magnitude
+	end
+
+sub turn_around
+	motor.left.target = 500
+	motor.right.target = -500
+
+sub straight_shot
+	motor.left.target = 500
+	motor.right.target = 500
+
+onevent button.center
+    if button.center == 1 then
+    		if state == 0 then
+    			state = 1
+    			wiggle_step = 0
+    			callsub move_shy
+    			timer.period[0] = wiggle_step_time
+    		else
+    			timer.period[0] = 0
+    			wiggle_step = -1
+    			state = 0
+    			callsub rest
+        end
+    end
+
+onevent timer0
+	if state == 1 then
+		wiggle_step += 1
+		if wiggle_step &lt; 25 then
+			callsub move_shy
+		else
+			timer.period[0] = 0
+			wiggle_step = -1
+			state = 2
+			callsub turn_around
+			timer.period[0] = turn_time
+		end
+	elseif state == 2 then
+		timer.period[0] = 0
+		state = 3
+		callsub straight_shot
+		timer.period[0] = shot_time
+	elseif state == 3 then
+		timer.period[0] = 0
+		state = 0
+		callsub rest
+	end
+
+</node>
+
+
+</network>

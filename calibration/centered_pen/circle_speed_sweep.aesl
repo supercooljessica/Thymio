@@ -1,0 +1,137 @@
+<!DOCTYPE aesl-source>
+<network>
+<keywords flag="true"/>
+<node nodeId="31202" name="thymio-II"><![CDATA[# Seven counterclockwise circles: left motor -20, -10, 0, 10, 20, 30, 40.
+# Right motor stays at 150. Press centre to start; press it again to stop.
+# Place the robot at the innermost circle's rightmost point, facing along
+# the circle (with its centre to the robot's left).
+# After each circle it turns right, drives outward along a common radial
+# line, then turns left to face the tangent of the next circle.
+# The connecting moves will also leave ink if the pen remains on the paper.
+
+var t90_ccw = 1670          # ms for 90 degrees at -150, 150
+var t90_cw = 1670           # ms for 90 degrees at 150, -150
+var outer_speed = 150
+var circle_time_percent = 100  # increase if circles stop short
+var half_wheelbase_mm = 50     # estimated half-distance between wheels; tune for concentricity
+var cm = 167                  # ms per centimetre at 150, 150
+var settle_ms = 200
+
+var state = 0              # 0 ready; 1 circle; 2-8 reposition; 9 finished; 10 start delay
+var circle_index = 0       # 0 through 6
+var circle_quarters = 0
+var inner_speed = 0
+var speed_gap = 0
+var speed_sum = 0
+var raw_quarter_ms = 0
+var quarter_ms = 0
+var radius_mm = 0
+var next_radius_mm = 0
+var outward_mm = 0
+var outward_ms = 0
+
+timer.period[0] = 0
+motor.left.target = 0
+motor.right.target = 0
+call leds.top(32, 12, 0)  # orange: ready
+
+sub stop_robot
+timer.period[0] = 0
+motor.left.target = 0
+motor.right.target = 0
+state = 0
+call leds.top(32, 12, 0)
+
+sub start_circle
+inner_speed = 10 * circle_index - 20
+speed_gap = outer_speed - inner_speed
+speed_sum = outer_speed + inner_speed
+# A 90-degree spin at -150, 150 has a target-speed gap of 300.
+# Four timed quarters approximate one full circle at the chosen speeds.
+call math.muldiv(raw_quarter_ms, t90_ccw, 300, speed_gap)
+call math.muldiv(quarter_ms, raw_quarter_ms, circle_time_percent, 100)
+# Robot-centre radius for a differential-drive turn, in millimetres.
+call math.muldiv(radius_mm, half_wheelbase_mm, speed_sum, speed_gap)
+circle_quarters = 0
+state = 1
+motor.left.target = inner_speed
+motor.right.target = outer_speed
+call leds.top(0, 20, 20)  # cyan: drawing a circle
+timer.period[0] = quarter_ms
+
+onevent button.center
+if button.center == 1 then
+	if state == 0 or state == 9 then
+		circle_index = 0
+		state = 10
+		call leds.top(0, 20, 20)
+		timer.period[0] = 1000  # time to lift your hand before drawing
+	else
+		callsub stop_robot
+	end
+end
+
+onevent timer0
+timer.period[0] = 0
+if state == 10 then
+	callsub start_circle
+elseif state == 1 then
+	circle_quarters += 1
+	if circle_quarters < 4 then
+		timer.period[0] = quarter_ms
+	else
+		motor.left.target = 0
+		motor.right.target = 0
+		if circle_index < 6 then
+			circle_index += 1
+			inner_speed = 10 * circle_index - 20
+			speed_gap = outer_speed - inner_speed
+			speed_sum = outer_speed + inner_speed
+			call math.muldiv(next_radius_mm, half_wheelbase_mm, speed_sum, speed_gap)
+			outward_mm = next_radius_mm - radius_mm
+			call math.muldiv(outward_ms, outward_mm, cm, 10)
+			state = 2
+			call leds.top(20, 10, 0)  # amber: moving to the next circle
+			timer.period[0] = settle_ms
+		else
+			state = 9
+			call leds.top(0, 32, 0)  # green: finished
+		end
+	end
+elseif state == 2 then
+	# From the tangent, turn right to point radially outward.
+	state = 3
+	motor.left.target = 150
+	motor.right.target = -150
+	timer.period[0] = t90_cw
+elseif state == 3 then
+	state = 4
+	motor.left.target = 0
+	motor.right.target = 0
+	timer.period[0] = settle_ms
+elseif state == 4 then
+	state = 5
+	motor.left.target = 150
+	motor.right.target = 150
+	timer.period[0] = outward_ms
+elseif state == 5 then
+	state = 6
+	motor.left.target = 0
+	motor.right.target = 0
+	timer.period[0] = settle_ms
+elseif state == 6 then
+	# Turn left so the next circle starts tangent to the same radial line.
+	state = 7
+	motor.left.target = -150
+	motor.right.target = 150
+	timer.period[0] = t90_ccw
+elseif state == 7 then
+	state = 8
+	motor.left.target = 0
+	motor.right.target = 0
+	timer.period[0] = settle_ms
+elseif state == 8 then
+	callsub start_circle
+end
+]]></node>
+</network>

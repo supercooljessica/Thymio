@@ -1,0 +1,16 @@
+<!DOCTYPE aesl-source>
+<network>
+<keywords flag="true"/>
+<node nodeId="1" name="thymio-II"><![CDATA[var state = 1
+call leds.top(0, 0, 32)
+
+onevent buttons
+if button.forward == 1 then
+    state = 2
+    call leds.top(0, 32, 0)
+elseif button.backward == 1 then
+    state = 1
+    call leds.top(0, 0, 32)
+end
+]]></node>
+</network>

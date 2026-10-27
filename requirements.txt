@@ -1,1 +1,3 @@
 tdmclient==0.1.21
+pyserial==3.5
+thymiodirect==0.1.2

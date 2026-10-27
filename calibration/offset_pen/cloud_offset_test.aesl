@@ -1,0 +1,195 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="31202" name="thymio-II">
+# Draw the cloud through (2,1), (1,2), (-1,2), (-3,1), (-1,-1),
+# (1,-1), and back to (2,1). Coordinates are scaled by unit_mm.
+# The PEN TIP, not the wheel axle, follows the six semicircles.
+#
+# Put the pen tip at (2*unit_mm, unit_mm) on your drawing surface.
+# Point the robot straight toward +x (right on the drawing).
+# Centre: start after 1 second; press again to stop. Orange = ready,
+# cyan = drawing, green = finished, red = invalid settings/speed.
+#
+# Unlike the centered-pen version, there are no in-place turns at
+# the joins: a pivot would drag this offset pen across the paper.
+
+var pen_forward_mm = 75    # pen ahead of axle midpoint; MUST be > 0
+var pen_right_mm = 48       # pen right of robot centerline; negative = left
+var half_wheelbase_mm = 50  # half the wheel-to-wheel contact spacing
+var unit_mm = 50            # cloud size; one coordinate unit in mm
+var pen_speed_target = 120  # desired pen-tip speed, in motor-target units
+var t90_ms = 1670           # measured 90-degree spin at -150, +150
+
+# Each cloud lobe is a counterclockwise semicircle. Radius is half
+# the chord, in thousandths of unit_mm. The start tangents are in
+# tenths of a degree, with 0 = +x and 900 = +y.
+var radius_factors[6] = [707, 1000, 1118, 1414, 1000, 1118]
+var tangent_starts[6] = [450, 900, 1166, 2250, 2700, 3334]
+
+var state = 0              # 0 ready, 1 delay, 2 drawing, 3 finished, 4 error
+var arc_index = 0
+var tick_index = 0
+var arc_ticks = 0
+var radius_mm = 0
+var wheelbase_mm = 0
+var heading_tenths = 0    # estimated robot heading; starts along +x
+var heading_increment = 0
+var heading_remainder = 0
+var heading_numerator = 0
+var path_tenths = 0
+var tangent_tenths = 0
+var delta_tenths = 0
+var native_angle = 0
+var sin_delta = 0
+var cos_delta = 0
+var forward_component = 0
+var side_component = 0
+var right_correction = 0
+var axle_speed = 0
+var speed_gap = 0
+var left_command = 0
+var right_command = 0
+
+timer.period[0] = 0
+motor.left.target = 0
+motor.right.target = 0
+call leds.top(32, 12, 0)
+
+sub stop_robot
+timer.period[0] = 0
+motor.left.target = 0
+motor.right.target = 0
+state = 0
+call leds.top(32, 12, 0)
+
+sub fail_safe
+timer.period[0] = 0
+motor.left.target = 0
+motor.right.target = 0
+state = 4
+call leds.top(32, 0, 0)
+
+sub command_pen_velocity
+# A wheel-axis robot with forward pen offset f and right offset r has
+# pen velocity (v + r*w) forward and f*w to its left. Resolve the
+# desired cloud tangent into these two components, then solve for
+# axle speed v and angular speed w. Aseba's math.sin/cos use an
+# angle scale of 16384 per 90 degrees and a value scale of 32767.
+call math.muldiv(path_tenths, tick_index, 1800, arc_ticks)
+tangent_tenths = tangent_starts[arc_index] + path_tenths
+if tangent_tenths >= 3600 then
+	tangent_tenths -= 3600
+end
+delta_tenths = tangent_tenths - heading_tenths
+if delta_tenths > 1800 then
+	delta_tenths -= 3600
+elseif delta_tenths &lt; -1800 then
+	delta_tenths += 3600
+end
+call math.muldiv(native_angle, delta_tenths, 16383, 900)
+call math.cos(cos_delta, native_angle)
+call math.sin(sin_delta, native_angle)
+call math.muldiv(forward_component, pen_speed_target, cos_delta, 32767)
+call math.muldiv(side_component, pen_speed_target, sin_delta, 32767)
+call math.muldiv(speed_gap, side_component, wheelbase_mm, pen_forward_mm)
+call math.muldiv(right_correction, side_component, pen_right_mm, pen_forward_mm)
+axle_speed = forward_component - right_correction
+left_command = axle_speed - speed_gap / 2
+right_command = left_command + speed_gap
+if speed_gap &lt; -200 or speed_gap > 200 or left_command &lt; -500 or left_command > 500 or right_command &lt; -500 or right_command > 500 then
+	callsub fail_safe
+else
+	motor.left.target = left_command
+	motor.right.target = right_command
+end
+
+sub start_arc
+tick_index = 0
+call math.muldiv(radius_mm, unit_mm, radius_factors[arc_index], 1000)
+# A 90-degree spin at wheel gap 300 takes t90_ms. Thus an arc of
+# length pi*radius_mm at pen speed pen_speed_target needs this many
+# 50-ms ticks: radius_mm * 300 * t90_ms /
+# (half_wheelbase_mm * pen_speed_target * 50).
+call math.muldiv(arc_ticks, radius_mm, t90_ms, half_wheelbase_mm)
+call math.muldiv(arc_ticks, arc_ticks, 6, pen_speed_target)
+if arc_ticks &lt; 1 then
+	arc_ticks = 1
+end
+state = 2
+call leds.top(0, 20, 20)
+callsub command_pen_velocity
+if state == 2 then
+	timer.period[0] = 50
+end
+
+onevent button.center
+if button.center == 1 then
+	if state == 0 or state == 3 or state == 4 then
+		if pen_forward_mm &lt;= 0 or half_wheelbase_mm &lt;= 0 or unit_mm &lt;= 0 or pen_speed_target &lt;= 0 or t90_ms &lt;= 0 then
+			callsub fail_safe
+		else
+			wheelbase_mm = half_wheelbase_mm * 2
+			arc_index = 0
+			heading_tenths = 0
+			heading_remainder = 0
+			state = 1
+			motor.left.target = 0
+			motor.right.target = 0
+			call leds.top(0, 20, 20)
+			timer.period[0] = 1000
+		end
+	else
+		callsub stop_robot
+	end
+end
+
+onevent timer0
+if state == 1 then
+	callsub start_arc
+elseif state == 2 then
+	# Integrate the heading from the wheel command just completed.
+	# At a speed gap of 300, t90_ms corresponds to 900 tenths of a degree.
+	# For each 50-ms tick: delta heading = gap * 150 / t90_ms.
+	# Carry the fractional remainder so roundoff does not accumulate.
+	heading_numerator = heading_remainder + speed_gap * 150
+	heading_increment = heading_numerator / t90_ms
+	heading_remainder = heading_numerator - heading_increment * t90_ms
+	heading_tenths += heading_increment
+	if heading_tenths >= 3600 then
+		heading_tenths -= 3600
+	elseif heading_tenths &lt; 0 then
+		heading_tenths += 3600
+	end
+	tick_index += 1
+	if tick_index >= arc_ticks then
+		arc_index += 1
+		if arc_index >= 6 then
+			timer.period[0] = 0
+			motor.left.target = 0
+			motor.right.target = 0
+			state = 3
+			call leds.top(0, 32, 0)
+		else
+			callsub start_arc
+		end
+	else
+		callsub command_pen_velocity
+	end
+end
+</node>
+
+
+</network>

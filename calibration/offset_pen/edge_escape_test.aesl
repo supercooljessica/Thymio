@@ -1,0 +1,114 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="31202" name="thymio-II"># Drive only while both downward IR sensors see a reflective white surface.
+# A brief dark line is ignored. Sustained low readings from either sensor
+# trigger the backward wiggle, 180-degree turn, and one-second shot.
+# Restart the program to run again after the sequence.
+# Adjust white_min after reading prox.ground.delta[0] and [1] on your surface.
+var white_min = 500
+var forward_speed = 100
+var low_samples_to_stop = 10  # prox readings arrive about every 100 ms
+var wiggle_speed = 300
+var swerve_magnitude = 300
+var wiggle_step_time = 50
+var wiggle_steps = 25
+var turn_time = 1200
+var shot_time = 1000
+var wiggle_step = -1
+var shy_state = 0  # 0 idle/finished, 1 wiggle, 2 turn, 3 straight shot
+var left_low_samples = 0
+var right_low_samples = 0
+var stopped = 0
+
+timer.period[0] = 0
+motor.left.target = 0
+motor.right.target = 0
+call leds.top(32, 0, 0)
+
+sub move_shy
+	if wiggle_step % 2 == 0 then
+		motor.left.target = -wiggle_speed - swerve_magnitude
+		motor.right.target = -wiggle_speed + swerve_magnitude
+	else
+		motor.left.target = -wiggle_speed + swerve_magnitude
+		motor.right.target = -wiggle_speed - swerve_magnitude
+	end
+
+sub turn_around
+	motor.left.target = 500
+	motor.right.target = -500
+
+sub straight_shot
+	motor.left.target = 500
+	motor.right.target = 500
+
+onevent prox
+if stopped == 0 then
+	if prox.ground.delta[0] &lt;= white_min then
+		left_low_samples += 1
+	else
+		left_low_samples = 0
+	end
+	if prox.ground.delta[1] &lt;= white_min then
+		right_low_samples += 1
+	else
+		right_low_samples = 0
+	end
+
+	if left_low_samples >= low_samples_to_stop or right_low_samples >= low_samples_to_stop then
+		stopped = 1
+		shy_state = 1
+		wiggle_step = 0
+		callsub move_shy
+		call leds.top(0, 0, 32)
+		timer.period[0] = wiggle_step_time
+	elseif left_low_samples == 0 and right_low_samples == 0 then
+		motor.left.target = forward_speed
+		motor.right.target = forward_speed
+		call leds.top(0, 32, 0)
+	end
+end
+
+onevent timer0
+if shy_state == 1 then
+	wiggle_step += 1
+	if wiggle_step &lt; wiggle_steps then
+		callsub move_shy
+	else
+		timer.period[0] = 0
+		wiggle_step = -1
+		shy_state = 2
+		callsub turn_around
+		call leds.top(24, 0, 24)
+		timer.period[0] = turn_time
+	end
+elseif shy_state == 2 then
+	timer.period[0] = 0
+	shy_state = 3
+	callsub straight_shot
+	call leds.top(0, 32, 0)
+	timer.period[0] = shot_time
+elseif shy_state == 3 then
+	timer.period[0] = 0
+	shy_state = 0
+	motor.left.target = 0
+	motor.right.target = 0
+	call leds.top(32, 0, 0)
+end
+</node>
+
+
+</network>

@@ -1,0 +1,113 @@
+<!DOCTYPE aesl-source>
+<network>
+<keywords flag="true"/>
+<node nodeId="31202" name="thymio-II"><![CDATA[
+# Draw six outward semicircles through these points, in order:
+# (2,1), (1,2), (-1,2), (-3,1), (-1,-1), (1,-1), then back to (2,1).
+# Each coordinate unit is unit_mm millimetres. Put the centered pen at
+# (2*unit_mm, unit_mm), with the robot facing northeast (45 degrees from +x).
+# Centre button starts after a one-second delay; press again to stop.
+# Orange = ready, cyan = arc, purple = turn, green = finished.
+
+var unit_mm = 50             # scale: 1 coordinate unit = 50 mm
+var half_wheelbase_mm = 50   # half the distance between wheel contact points
+var outer_speed = 150        # right wheel on every counterclockwise arc
+var t90_ccw = 1670          # measured ms for 90 degrees at -150, 150
+var t90_cw = 1670           # measured ms for 90 degrees at 150, -150
+var arc_time_percent = 100  # adjust if the arcs systematically stop short/long
+var settle_ms = 200         # stop briefly before and after each in-place turn
+
+# Each arc's radius is half its chord length, in thousandths of unit_mm.
+var radius_factors[6] = [707, 1000, 1118, 1414, 1000, 1118]
+# Clockwise turns between arc tangents, in tenths of a degree.
+var turn_tenths[5] = [1350, 1534, 716, 1350, 1166]
+
+var state = 0  # 0 ready, 1 start delay, 2 arc, 3 settle, 4 turn, 5 settle, 6 done
+var arc_index = 0
+var radius_factor = 0
+var turn_tenths_now = 0
+var radius_mm = 0
+var radius_minus_wheelbase = 0
+var radius_plus_wheelbase = 0
+var inner_speed = 0
+var speed_gap = 0
+var raw_arc_ms = 0
+var arc_ms = 0
+var turn_ms = 0
+
+timer.period[0] = 0
+motor.left.target = 0
+motor.right.target = 0
+call leds.top(32, 12, 0)
+
+sub stop_robot
+timer.period[0] = 0
+motor.left.target = 0
+motor.right.target = 0
+state = 0
+call leds.top(32, 12, 0)
+
+sub start_arc
+radius_factor = radius_factors[arc_index]
+call math.muldiv(radius_mm, unit_mm, radius_factor, 1000)
+radius_minus_wheelbase = radius_mm - half_wheelbase_mm
+radius_plus_wheelbase = radius_mm + half_wheelbase_mm
+call math.muldiv(inner_speed, outer_speed, radius_minus_wheelbase, radius_plus_wheelbase)
+speed_gap = outer_speed - inner_speed
+# 180 degrees at this wheel-speed gap, compared with a 90-degree spin
+# at -150,150 (gap 300): time = t90_ccw * 600 / speed_gap.
+call math.muldiv(raw_arc_ms, t90_ccw, 600, speed_gap)
+call math.muldiv(arc_ms, raw_arc_ms, arc_time_percent, 100)
+state = 2
+motor.left.target = inner_speed
+motor.right.target = outer_speed
+call leds.top(0, 20, 20)
+timer.period[0] = arc_ms
+
+onevent button.center
+if button.center == 1 then
+	if state == 0 or state == 6 then
+		arc_index = 0
+		state = 1
+		motor.left.target = 0
+		motor.right.target = 0
+		call leds.top(0, 20, 20)
+		timer.period[0] = 1000
+	else
+		callsub stop_robot
+	end
+end
+
+onevent timer0
+timer.period[0] = 0
+if state == 1 then
+	callsub start_arc
+elseif state == 2 then
+	motor.left.target = 0
+	motor.right.target = 0
+	if arc_index < 5 then
+		state = 3
+		timer.period[0] = settle_ms
+	else
+		state = 6
+		call leds.top(0, 32, 0)
+	end
+elseif state == 3 then
+	turn_tenths_now = turn_tenths[arc_index]
+	call math.muldiv(turn_ms, t90_cw, turn_tenths_now, 900)
+	state = 4
+	motor.left.target = 150
+	motor.right.target = -150
+	call leds.top(20, 0, 20)
+	timer.period[0] = turn_ms
+elseif state == 4 then
+	motor.left.target = 0
+	motor.right.target = 0
+	state = 5
+	timer.period[0] = settle_ms
+elseif state == 5 then
+	arc_index += 1
+	callsub start_arc
+end
+]]></node>
+</network>

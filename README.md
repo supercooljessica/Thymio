@@ -9,6 +9,7 @@ A Thymio that behaves like Shin-chan: it hunts down whoever is nearby, chases th
 | File | What it is |
 |---|---|
 | `shinchan_bot.aesl` | **The robot program.** Search, chase, taunt, avoid, and draw underpants when bored. |
+| `shinchan_shy.aesl` | Explore open space, draw small clouds, and escape front, rear, or edge hazards. |
 | `shinchan_drawings.aesl` | Drawing only: a button picks a spiral, a flower or underpants. |
 | `sim_victim.aesl` | A simple wandering robot for Shin-chan to chase in the simulator. |
 | `playgrounds/arena.playground` | Simulator arena: empty 2 × 2 m square, four robot-sized cylinders, Shin-chan in the middle. |
@@ -21,7 +22,9 @@ A Thymio that behaves like Shin-chan: it hunts down whoever is nearby, chases th
 | `docs/instructions_prompts.rtf` | The original assignment prompts. |
 | `tools/thymio.py`, `tools/trail.py` | Command-line helper (see below). |
 | `thymio.cmd` / `thymio.sh` | Launchers for the helper (Windows / macOS). |
-| `requirements.txt` | Python package the helper needs (`tdmclient`). |
+| `requirements.txt` | Python packages for the Thymio helper and serial bridge. |
+| `calibration/` | Pen and motion calibration sketches, grouped by centered or offset pen. |
+| `xiao_communication/` | XIAO sketches, USB communication experiments, bridges, dashboards, and setup notes. |
 
 ## Software you need
 
@@ -106,6 +109,14 @@ Settings at the top of the file; `thymio set` changes them while it runs. The fi
 
 In the simulator the robot is a bit slower than these drawing defaults assume; use `thymio set t90=1482 cm=201` there.
 
+## The shy bot (`shinchan_shy.aesl`)
+
+The shy bot explores open space for eight seconds, then draws the six-semicircle cloud from `calibration/centered_pen/cloud_semicircle_test.aesl` at `unit_mm = 20`. It uses the current heading as the cloud's starting direction. When the cloud finishes, a new eight-second exploration session begins. At a moderate front reading it slows down and steers around the clearer side for up to three seconds. A rapid rise in the reading, a very close object, a failed maneuver, or a sustained dark ground reading triggers the backward wiggle, 180° turn, and forward shot. A moderate rear reading makes it move forward a little faster; a rapidly rising or very close rear reading starts a forward wiggle and shot without a turn. Drawing waits while an obstacle is near. Interrupted clouds are abandoned and started fresh after another exploration session.
+
+The main states are explore (green, or yellow while maneuvering), draw (cyan), and avoid (red). Orange means a hazard blocked the planned escape; the robot waits stopped until the front, rear, and ground readings are clear for three sensor updates. The center button pauses (blue) or resumes. During an escape, a newly detected hazard stops the robot instead of launching another escape immediately.
+
+Settings near the top include `front_threshold`, `front_hard`, `rear_threshold`, `rear_hard`, `fast_rise`, `maneuver_fast_rise`, `maneuver_timeout_ticks`, `white_min`, `edge_samples`, `unit_mm`, `t90_ccw`, `t90_cw`, and the wiggle, turn, and shot timings. `fast_rise` is a rise in raw IR readings over roughly three sensor updates; it is an apparent closing-rate cue, not a measurement of an object's speed in millimetres per second. Two consecutive rising readings are required, and the threshold is higher while maneuvering because turning also changes the readings. The normal ground debounce is ten readings, as in the edge test; the faster escape motions use a two-reading edge stop. Try it first with the pen raised and enough room around the robot, then adjust the thresholds and timing on the actual surface.
+
 ## The drawing program (`shinchan_drawings.aesl`)
 
 Draws with a pen in the centre hole. The pen line is the path of the robot's centre: driving draws, spinning in place leaves only a dot.
@@ -125,6 +136,10 @@ Drawing starts 1 s after you let go of the button. In the simulator (no buttons)
 |---|---|---|---|
 | `t90` | 1244 | ms for a 90° spin | Draw the flower. If the last petal lands past the first, lower `t90`; if it falls short, raise it. |
 | `cm` | 167 | ms to drive 1 cm | Draw the underpants and measure the waistband. New `cm` = `cm` × 120 ÷ measured mm. |
+
+For the newer turn, circle, edge, and shy-motion tests, see [`calibration/`](calibration/README.md). The centered-pen turn and shape test assumes the pen is on the wheel axis; the circle and motion tests are also available for an offset pen.
+
+For XIAO and USB communication experiments, see [`xiao_communication/`](xiao_communication/README.md).
 
 ## Working with Claude Code
 

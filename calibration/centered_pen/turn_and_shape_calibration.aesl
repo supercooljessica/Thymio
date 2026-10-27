@@ -1,0 +1,323 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="31202" name="thymio-II"># Put the robot on a marked start heading and mark 90 degrees to its left.
+# Startup calibration: orange = ready. Press centre to turn left 90 degrees.
+# Blue = adjust to the 90-degree mark with left/right, then press centre.
+# The robot turns right 90 degrees. Purple = adjust to the start mark, then press centre.
+# After the right-turn adjustment, centre starts a counterclockwise circle trial.
+# Cyan = circle trial; green = drawing mode: forward star, left heart, right cloud, centre stop.
+# t90_ccw and t90_cw are measured in milliseconds and last until the next program restart.
+var t90_ccw = 1670
+var t90_cw = 1670
+var circle_outer_speed = 150  # right wheel for the counterclockwise circle
+var circle_inner_speed = 10   # left wheel; use 0 or more, at least 50 below outer speed
+var cm = 167    # milliseconds to drive 1 cm at motor speeds 150, 150
+var star_settle_ms = 200   # stop between a star line and turn
+var star_turn_trim_ms = 100 # subtract from the estimated 144-degree turn; raise if it still overshoots
+var mode = 0    # 0 ready, 1 left turn, 2 adjust left, 3 right turn, 4 adjust right, 5 circle delay, 6 circle, 7 draw
+var shape = 0   # 0 stopped, 1 star, 2 heart, 3 cloud
+var step_size = 0
+var circle_quarters = 0
+var circle_speed_gap = 0
+var circle_quarter_ms = 0
+var l = 0
+var r = 0
+var d = 0
+var jog_dir = 0  # 1 = counterclockwise, -1 = clockwise
+var jog_ms = 0
+var ccw_first = 0
+var cw_first = 0
+var ccw_second = 0
+var cw_second = 0
+var den_ccw = 0
+var den_cw = 0
+var correction = 0
+
+motor.left.target = 0
+motor.right.target = 0
+timer.period[0] = 0
+timer.period[1] = 0
+call leds.top(32, 12, 0)
+
+sub finish_jog
+timer.period[1] = 0
+motor.left.target = 0
+motor.right.target = 0
+if jog_dir == 1 then
+	if mode == 2 then
+		ccw_first += jog_ms
+	else
+		ccw_second += jog_ms
+	end
+elseif jog_dir == -1 then
+	if mode == 2 then
+		cw_first += jog_ms
+	else
+		cw_second += jog_ms
+	end
+end
+jog_dir = 0
+jog_ms = 0
+
+sub start_left_turn
+ccw_first = 0
+cw_first = 0
+ccw_second = 0
+cw_second = 0
+shape = 0
+mode = 1
+timer.period[0] = 0
+motor.left.target = -150
+motor.right.target = 150
+call leds.top(0, 0, 8)
+timer.period[0] = t90_ccw
+
+sub start_right_turn
+mode = 3
+timer.period[0] = 0
+motor.left.target = 150
+motor.right.target = -150
+call leds.top(12, 0, 12)
+timer.period[0] = t90_cw
+
+sub calculate_turn_times
+# Two 90-degree alignments solve for both directions' rates; no angle sensor is used.
+den_ccw = t90_cw + cw_second + cw_first
+den_cw = t90_ccw + ccw_first + ccw_second
+call math.muldiv(correction, cw_first, den_cw, den_ccw)
+t90_ccw = t90_ccw + ccw_first - correction
+call math.muldiv(correction, ccw_second, den_ccw, den_cw)
+t90_cw = t90_cw + cw_second - correction
+if t90_ccw &lt; 500 then
+	t90_ccw = 500
+elseif t90_ccw > 4000 then
+	t90_ccw = 4000
+end
+if t90_cw &lt; 500 then
+	t90_cw = 500
+elseif t90_cw > 4000 then
+	t90_cw = 4000
+end
+
+sub stop_drawing
+shape = 0
+step_size = 0
+timer.period[0] = 0
+motor.left.target = 0
+motor.right.target = 0
+
+sub start_circle
+# Compare the wheel-speed difference with a 90-degree spin at -150, 150.
+# Four quarter-circle intervals give one complete loop at the chosen speeds.
+mode = 5
+circle_quarters = 0
+timer.period[0] = 0
+motor.left.target = 0
+motor.right.target = 0
+call leds.top(0, 20, 20)
+timer.period[0] = 1000  # time to lift your hand before the circle starts
+
+sub start_drawing
+step_size = 0
+timer.period[0] = 0
+motor.left.target = 0
+motor.right.target = 0
+timer.period[0] = 1000  # give time to lift your hand and place the pen
+
+onevent button.forward
+if mode == 7 and button.forward == 0 then
+	shape = 1
+	callsub start_drawing
+end
+
+onevent button.left
+if (mode == 2 or mode == 4) and button.left == 1 and jog_dir == 0 then
+	jog_dir = 1
+	jog_ms = 0
+	motor.left.target = -150
+	motor.right.target = 150
+	timer.period[1] = 10
+elseif (mode == 2 or mode == 4) and button.left == 0 and jog_dir == 1 then
+	callsub finish_jog
+elseif mode == 7 and button.left == 0 then
+	shape = 2
+	callsub start_drawing
+end
+
+onevent button.right
+if (mode == 2 or mode == 4) and button.right == 1 and jog_dir == 0 then
+	jog_dir = -1
+	jog_ms = 0
+	motor.left.target = 150
+	motor.right.target = -150
+	timer.period[1] = 10
+elseif (mode == 2 or mode == 4) and button.right == 0 and jog_dir == -1 then
+	callsub finish_jog
+elseif mode == 7 and button.right == 0 then
+	shape = 3
+	callsub start_drawing
+end
+
+onevent button.center
+if button.center == 1 then
+	if mode == 0 then
+		callsub start_left_turn
+	elseif mode == 2 then
+		callsub finish_jog
+		callsub start_right_turn
+	elseif mode == 4 then
+		callsub finish_jog
+		callsub calculate_turn_times
+		callsub start_circle
+	elseif mode == 1 or mode == 3 then
+		# An extra centre press during an automatic turn aborts calibration.
+		timer.period[0] = 0
+		motor.left.target = 0
+		motor.right.target = 0
+		mode = 0
+		call leds.top(32, 12, 0)
+	elseif mode == 5 or mode == 6 then
+		# Centre can stop the circle trial and go straight to drawing mode.
+		callsub stop_drawing
+		mode = 7
+		call leds.top(0, 32, 0)
+	else
+		callsub stop_drawing
+	end
+end
+
+onevent timer1
+if (mode == 2 or mode == 4) and jog_dir != 0 then
+	jog_ms += 10
+	if jog_ms >= 1000 then
+		callsub finish_jog
+	end
+end
+
+onevent timer0
+if mode == 1 then
+	timer.period[0] = 0
+	motor.left.target = 0
+	motor.right.target = 0
+	mode = 2
+	call leds.top(0, 0, 32)
+elseif mode == 3 then
+	timer.period[0] = 0
+	motor.left.target = 0
+	motor.right.target = 0
+	mode = 4
+	call leds.top(24, 0, 24)
+elseif mode == 5 then
+	timer.period[0] = 0
+	circle_speed_gap = circle_outer_speed - circle_inner_speed
+	if circle_inner_speed >= 0 and circle_speed_gap >= 50 and circle_outer_speed &lt;= 500 then
+		call math.muldiv(circle_quarter_ms, t90_ccw, 300, circle_speed_gap)
+		mode = 6
+		motor.left.target = circle_inner_speed
+		motor.right.target = circle_outer_speed
+		timer.period[0] = circle_quarter_ms
+	else
+		mode = 7
+		call leds.top(0, 32, 0)
+	end
+elseif mode == 6 then
+	circle_quarters += 1
+	if circle_quarters &lt; 4 then
+		timer.period[0] = 0
+		timer.period[0] = circle_quarter_ms
+	else
+		callsub stop_drawing
+		mode = 7
+		call leds.top(0, 32, 0)
+	end
+elseif mode == 7 then
+	l = 0
+	r = 0
+	d = 0
+
+		if shape == 1 and step_size &lt; 17 then
+			# Five lines, four turns, with a pause before and after each turn.
+			if step_size % 4 == 0 then
+			l = 150
+			r = 150
+			d = 8 * cm
+			elseif step_size % 4 == 2 then
+			l = 150
+			r = -150
+				d = t90_cw * 8 / 5 - star_turn_trim_ms
+			else
+				d = star_settle_ms
+		end
+
+	elseif shape == 2 and step_size &lt; 5 then
+		# Start at the bottom tip, facing toward the upper left.
+		if step_size == 0 or step_size == 4 then
+			l = 150
+			r = 150
+			d = 95 * cm / 10  # diagonal sides: 9.5 cm
+		elseif step_size == 2 then
+			l = -150
+			r = 150
+			d = t90_ccw       # turn left at the notch
+		else
+			l = 150
+			r = 0
+			d = 4 * t90_cw    # two rounded lobes
+		end
+
+	elseif shape == 3 and step_size &lt; 9 then
+		# Start at the lower left, facing right: base, right side, three bumps, left side.
+		if step_size == 0 then
+			l = 150
+			r = 150
+			d = 19 * cm
+		elseif step_size == 1 then
+			l = -150
+			r = 150
+			d = t90_ccw
+		elseif step_size == 2 or step_size == 8 then
+			l = 150
+			r = 150
+			d = 2 * cm
+		elseif step_size == 4 or step_size == 6 then
+			l = -150
+			r = 150
+			d = 2 * t90_ccw   # face upward for the next bump
+		elseif step_size == 5 then
+			l = 0
+			r = 150
+			d = 4 * t90_ccw   # wide middle bump
+		else
+			l = -50
+			r = 150
+			d = 3 * t90_ccw   # smaller side bumps
+		end
+	end
+
+	if d > 0 then
+		motor.left.target = l
+		motor.right.target = r
+		timer.period[0] = 0
+		timer.period[0] = d
+		step_size += 1
+	else
+		callsub stop_drawing
+	end
+end
+</node>
+
+
+</network>

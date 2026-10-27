@@ -1,0 +1,498 @@
+<!DOCTYPE aesl-source>
+<network>
+<keywords flag="true"/>
+<node nodeId="31202" name="thymio-II"><![CDATA[
+# Shin-chan Shy: explore open space for 8 seconds, then draw a cloud.
+# A nearby, slow-changing front reading gets a three-second maneuver first.
+# A rapid rise, very close object, failed maneuver, or edge triggers escape.
+# A slow rear approach speeds exploration up; a fast/close one runs forward.
+# Centre button pauses/resumes. Green=explore, yellow=maneuver,
+# cyan=draw, red=avoid, orange=blocked, blue=paused.
+
+var front_threshold = 1500  # start maneuvering
+var front_hard = 3000       # escape immediately
+var front_clear = 900
+var rear_threshold = 1500   # move away gently
+var rear_hard = 3000        # escape immediately
+var rear_clear = 900
+var fast_rise = 800         # raw proximity rise across about 3 sensor updates
+var maneuver_fast_rise = 1400  # stronger rise required while turning
+var white_min = 500
+var edge_samples = 10       # normal edge debounce, from the edge test
+var fast_edge_samples = 2   # faster stop during high-speed escape
+var explore_speed = 100
+var rear_caution_speed = 140
+var maneuver_speed = 60
+var maneuver_steer = 90
+var maneuver_timeout_ticks = 30  # 3 seconds at 100 ms per timer0 event
+var explore_ticks_to_draw = 80  # timer0 is 100 ms, so 80 ticks = 8 seconds
+
+var unit_mm = 20            # cloud coordinate scale
+var half_wheelbase_mm = 50
+var cloud_outer_speed = 150
+var t90_ccw = 1670
+var t90_cw = 1670
+var arc_time_percent = 100
+var settle_ms = 200
+var radius_factors[6] = [707, 1000, 1118, 1414, 1000, 1118]
+var turn_tenths[5] = [1350, 1534, 716, 1350, 1166]
+
+var wiggle_speed = 300
+var swerve_magnitude = 300
+var wiggle_step_time = 50
+var wiggle_steps = 25
+var turn_time = 1200       # 180 degrees at 500, -500; tune on the robot
+var shot_time = 1000
+var shot_speed = 500
+
+var state = 1              # 1 explore, 2 draw, 3 avoid
+var paused = 0
+var seen_prox = 0
+var explore_ticks = 0
+var wander_sign = 1
+var maneuver_active = 0
+var maneuver_ticks = 0
+var maneuver_clear_samples = 0
+var maneuver_side = 1
+var drive_speed = 0
+var steer = 0
+var left_space = 0
+var right_space = 0
+var front_peak = 0
+var rear_peak = 0
+var front_min = 0
+var front_mean = 0
+var front_prev_1 = 0
+var front_prev_2 = 0
+var front_prev_3 = 0
+var rear_prev_1 = 0
+var rear_prev_2 = 0
+var rear_prev_3 = 0
+var trend_ready = 0
+var front_rise = 0
+var rear_rise = 0
+var front_fast_hits = 0
+var rear_fast_hits = 0
+var left_low = 0
+var right_low = 0
+var edge_confirmed = 0
+var edge_fast = 0
+var clear_samples = 0
+
+var draw_phase = 0         # 1 settle, 2 arc, 3 settle, 4 turn, 5 settle
+var arc_index = 0
+var radius_factor = 0
+var turn_tenths_now = 0
+var radius_mm = 0
+var radius_minus_wheelbase = 0
+var radius_plus_wheelbase = 0
+var cloud_inner_speed = 0
+var speed_gap = 0
+var raw_arc_ms = 0
+var arc_ms = 0
+var turn_ms = 0
+
+var avoid_kind = 0         # 1 front/edge, 2 rear
+var avoid_phase = 0        # 1 wiggle, 2 turn, 3 shot, 4 blocked
+var wiggle_index = 0
+var wiggle_left = 0
+var wiggle_right = 0
+
+timer.period[0] = 100
+timer.period[1] = 0
+motor.left.target = 0
+motor.right.target = 0
+call leds.top(0, 32, 0)
+
+sub drive_to_empty_space
+if seen_prox == 1 and front_peak < front_hard and rear_peak < rear_hard and edge_confirmed == 0 then
+	left_space = prox.horizontal[0] + prox.horizontal[1]
+	right_space = prox.horizontal[3] + prox.horizontal[4]
+	if maneuver_active == 1 then
+		drive_speed = maneuver_speed
+		steer = maneuver_side * maneuver_steer
+	else
+		drive_speed = explore_speed
+		if rear_peak >= rear_threshold then
+			drive_speed = rear_caution_speed
+		end
+		# More reflection on the right means more empty space on the left.
+		steer = (right_space - left_space) / 20 + wander_sign * 20
+		if steer > 80 then
+			steer = 80
+		elseif steer < -80 then
+			steer = -80
+		end
+	end
+	motor.left.target = drive_speed - steer
+	motor.right.target = drive_speed + steer
+else
+	motor.left.target = 0
+	motor.right.target = 0
+end
+
+sub resume_explore
+timer.period[1] = 0
+state = 1
+draw_phase = 0
+avoid_phase = 0
+explore_ticks = 0
+wander_sign = 1
+maneuver_active = 0
+maneuver_ticks = 0
+front_prev_1 = front_peak
+front_prev_2 = front_peak
+front_prev_3 = front_peak
+rear_prev_1 = rear_peak
+rear_prev_2 = rear_peak
+rear_prev_3 = rear_peak
+trend_ready = 1
+front_fast_hits = 0
+rear_fast_hits = 0
+call leds.top(0, 32, 0)
+callsub drive_to_empty_space
+
+sub start_maneuver
+if state == 2 then
+	timer.period[1] = 0
+	draw_phase = 0
+	explore_ticks = 0
+end
+state = 1
+maneuver_active = 1
+maneuver_ticks = 0
+maneuver_clear_samples = 0
+left_space = prox.horizontal[0] + prox.horizontal[1]
+right_space = prox.horizontal[3] + prox.horizontal[4]
+if right_space > left_space + 200 then
+	maneuver_side = 1
+elseif left_space > right_space + 200 then
+	maneuver_side = -1
+else
+	maneuver_side = wander_sign
+end
+call leds.top(20, 20, 0)
+callsub drive_to_empty_space
+
+sub finish_maneuver
+maneuver_active = 0
+maneuver_ticks = 0
+maneuver_clear_samples = 0
+call leds.top(0, 32, 0)
+callsub drive_to_empty_space
+
+sub block_motion
+timer.period[1] = 0
+motor.left.target = 0
+motor.right.target = 0
+state = 3
+avoid_phase = 4
+clear_samples = 0
+maneuver_active = 0
+call leds.top(32, 12, 0)
+
+sub start_wiggle_step
+if wiggle_index % 2 == 0 then
+	wiggle_left = wiggle_speed + swerve_magnitude
+	wiggle_right = wiggle_speed - swerve_magnitude
+else
+	wiggle_left = wiggle_speed - swerve_magnitude
+	wiggle_right = wiggle_speed + swerve_magnitude
+end
+if avoid_kind == 1 then
+	wiggle_left = -wiggle_left
+	wiggle_right = -wiggle_right
+end
+# Keep target speeds in the Thymio motor range.
+if wiggle_left > 500 then
+	wiggle_left = 500
+elseif wiggle_left < -500 then
+	wiggle_left = -500
+end
+if wiggle_right > 500 then
+	wiggle_right = 500
+elseif wiggle_right < -500 then
+	wiggle_right = -500
+end
+motor.left.target = wiggle_left
+motor.right.target = wiggle_right
+timer.period[1] = wiggle_step_time
+
+sub start_avoid
+timer.period[1] = 0
+state = 3
+draw_phase = 0
+maneuver_active = 0
+avoid_phase = 1
+wiggle_index = 0
+call leds.top(32, 0, 0)
+callsub start_wiggle_step
+
+sub start_shot
+if front_peak >= front_clear or edge_fast == 1 then
+	callsub block_motion
+else
+	avoid_phase = 3
+	motor.left.target = shot_speed
+	motor.right.target = shot_speed
+	timer.period[1] = shot_time
+end
+
+sub start_cloud
+timer.period[1] = 0
+motor.left.target = 0
+motor.right.target = 0
+state = 2
+arc_index = 0
+draw_phase = 1
+maneuver_active = 0
+call leds.top(0, 20, 20)
+timer.period[1] = settle_ms
+
+sub start_cloud_arc
+radius_factor = radius_factors[arc_index]
+call math.muldiv(radius_mm, unit_mm, radius_factor, 1000)
+radius_minus_wheelbase = radius_mm - half_wheelbase_mm
+radius_plus_wheelbase = radius_mm + half_wheelbase_mm
+call math.muldiv(cloud_inner_speed, cloud_outer_speed, radius_minus_wheelbase, radius_plus_wheelbase)
+speed_gap = cloud_outer_speed - cloud_inner_speed
+call math.muldiv(raw_arc_ms, t90_ccw, 600, speed_gap)
+call math.muldiv(arc_ms, raw_arc_ms, arc_time_percent, 100)
+draw_phase = 2
+motor.left.target = cloud_inner_speed
+motor.right.target = cloud_outer_speed
+timer.period[1] = arc_ms
+
+onevent button.center
+if button.center == 1 then
+	if paused == 0 then
+		paused = 1
+		timer.period[1] = 0
+		motor.left.target = 0
+		motor.right.target = 0
+		call leds.top(0, 0, 32)
+	else
+		paused = 0
+		if front_peak >= front_hard or rear_peak >= rear_hard or edge_confirmed == 1 or (front_peak >= front_threshold and rear_peak >= rear_threshold) then
+			callsub block_motion
+		else
+			callsub resume_explore
+			if front_peak >= front_threshold then
+				callsub start_maneuver
+			end
+		end
+	end
+end
+
+onevent prox
+seen_prox = 1
+call math.stat(prox.horizontal[0:4], front_min, front_peak, front_mean)
+call math.max(rear_peak, prox.horizontal[5:5], prox.horizontal[6:6])
+# This is apparent closing rate in raw IR units, not object speed in mm/s.
+# An initially repeated value lets the first few samples form a shorter window.
+if trend_ready == 0 then
+	front_rise = 0
+	rear_rise = 0
+	front_prev_1 = front_peak
+	front_prev_2 = front_peak
+	front_prev_3 = front_peak
+	rear_prev_1 = rear_peak
+	rear_prev_2 = rear_peak
+	rear_prev_3 = rear_peak
+	trend_ready = 1
+else
+	front_rise = front_peak - front_prev_3
+	rear_rise = rear_peak - rear_prev_3
+	front_prev_3 = front_prev_2
+	front_prev_2 = front_prev_1
+	front_prev_1 = front_peak
+	rear_prev_3 = rear_prev_2
+	rear_prev_2 = rear_prev_1
+	rear_prev_1 = rear_peak
+end
+if state == 1 and (maneuver_active == 1 or (steer > -30 and steer < 30)) and front_peak >= front_threshold then
+	if (maneuver_active == 0 and front_rise >= fast_rise) or (maneuver_active == 1 and front_rise >= maneuver_fast_rise) then
+		if front_fast_hits < 2 then
+			front_fast_hits += 1
+		end
+	else
+		front_fast_hits = 0
+	end
+else
+	front_fast_hits = 0
+end
+if state == 1 and maneuver_active == 0 and steer > -30 and steer < 30 and rear_peak >= rear_threshold and rear_rise >= fast_rise then
+	if rear_fast_hits < 2 then
+		rear_fast_hits += 1
+	end
+else
+	rear_fast_hits = 0
+end
+
+if prox.ground.delta[0] <= white_min then
+	if left_low < edge_samples then
+		left_low += 1
+	end
+else
+	left_low = 0
+end
+if prox.ground.delta[1] <= white_min then
+	if right_low < edge_samples then
+		right_low += 1
+	end
+else
+	right_low = 0
+end
+edge_confirmed = 0
+edge_fast = 0
+if left_low >= edge_samples or right_low >= edge_samples then
+	edge_confirmed = 1
+end
+if left_low >= fast_edge_samples or right_low >= fast_edge_samples then
+	edge_fast = 1
+end
+
+if paused == 0 then
+	if state == 3 then
+		if avoid_phase == 4 then
+			# Remain stopped until all directions are clear for three readings.
+			if front_peak < front_clear and rear_peak < rear_clear and edge_fast == 0 then
+				clear_samples += 1
+				if clear_samples >= 3 then
+					callsub resume_explore
+				end
+			else
+				clear_samples = 0
+			end
+		elseif avoid_phase == 1 then
+			if (avoid_kind == 1 and rear_peak >= rear_threshold) or (avoid_kind == 2 and (front_peak >= front_threshold or edge_fast == 1)) then
+				callsub block_motion
+			end
+		elseif avoid_phase == 2 then
+			if edge_fast == 1 then
+				callsub block_motion
+			end
+		elseif avoid_phase == 3 then
+			if front_peak >= front_threshold or edge_fast == 1 then
+				callsub block_motion
+			end
+		end
+	elseif edge_confirmed == 1 or front_peak >= front_hard or front_fast_hits >= 2 then
+		if rear_peak >= rear_threshold then
+			callsub block_motion
+		else
+			avoid_kind = 1
+			callsub start_avoid
+		end
+	elseif rear_peak >= rear_hard or rear_fast_hits >= 2 then
+		if front_peak >= front_clear or edge_fast == 1 then
+			callsub block_motion
+		else
+			avoid_kind = 2
+			callsub start_avoid
+		end
+	elseif front_peak >= front_threshold or maneuver_active == 1 then
+		if maneuver_active == 0 then
+			callsub start_maneuver
+		else
+			if front_peak < front_clear then
+				maneuver_clear_samples += 1
+				if maneuver_clear_samples >= 3 then
+					callsub finish_maneuver
+				end
+			else
+				maneuver_clear_samples = 0
+			end
+			if maneuver_active == 1 then
+				callsub drive_to_empty_space
+			end
+		end
+	elseif state == 1 then
+		callsub drive_to_empty_space
+	end
+end
+
+onevent timer0
+if paused == 0 and state == 1 and seen_prox == 1 then
+	explore_ticks += 1
+	if explore_ticks % 20 == 0 then
+		wander_sign = -wander_sign
+	end
+	if maneuver_active == 1 then
+		maneuver_ticks += 1
+		if maneuver_ticks >= maneuver_timeout_ticks then
+			if front_peak < front_threshold then
+				callsub finish_maneuver
+			elseif rear_peak >= rear_threshold then
+				callsub block_motion
+			else
+				avoid_kind = 1
+				callsub start_avoid
+			end
+		end
+	elseif explore_ticks >= explore_ticks_to_draw and front_peak < front_threshold and rear_peak < rear_threshold and edge_fast == 0 then
+		callsub start_cloud
+	end
+end
+
+onevent timer1
+timer.period[1] = 0
+if paused == 0 then
+	if state == 2 then
+		if draw_phase == 1 then
+			callsub start_cloud_arc
+		elseif draw_phase == 2 then
+			motor.left.target = 0
+			motor.right.target = 0
+			if arc_index < 5 then
+				draw_phase = 3
+				timer.period[1] = settle_ms
+			else
+				callsub resume_explore
+			end
+		elseif draw_phase == 3 then
+			turn_tenths_now = turn_tenths[arc_index]
+			call math.muldiv(turn_ms, t90_cw, turn_tenths_now, 900)
+			draw_phase = 4
+			motor.left.target = 150
+			motor.right.target = -150
+			timer.period[1] = turn_ms
+		elseif draw_phase == 4 then
+			motor.left.target = 0
+			motor.right.target = 0
+			draw_phase = 5
+			timer.period[1] = settle_ms
+		elseif draw_phase == 5 then
+			arc_index += 1
+			callsub start_cloud_arc
+		end
+	elseif state == 3 then
+		if avoid_phase == 1 then
+			wiggle_index += 1
+			if wiggle_index < wiggle_steps then
+				callsub start_wiggle_step
+			elseif avoid_kind == 1 then
+				if rear_peak >= rear_threshold or edge_confirmed == 1 then
+					callsub block_motion
+				else
+					avoid_phase = 2
+					motor.left.target = 500
+					motor.right.target = -500
+					timer.period[1] = turn_time
+				end
+			else
+				callsub start_shot
+			end
+		elseif avoid_phase == 2 then
+			callsub start_shot
+		elseif avoid_phase == 3 then
+			if front_peak >= front_clear or rear_peak >= rear_clear or edge_fast == 1 then
+				callsub block_motion
+			else
+				callsub resume_explore
+			end
+		end
+	end
+end
+]]></node>
+</network>
