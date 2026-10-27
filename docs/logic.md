@@ -1,14 +1,16 @@
 # How the programs think
 
-Three Aseba programs:
+Main Aseba programs and calibration sketches:
 
 | Program | What it is |
 |---|---|
 | `shinchan_bot.aesl` | The Shin-chan robot: hunts, chases, taunts, avoids, and draws underpants when bored. |
 | `shinchan_drawings.aesl` | Drawing only: a button picks a spiral, a flower or underpants. |
+| `shinchan_shy.aesl` | Explore open space, draw a cloud, maneuver around slow obstacles, and escape hazards. |
+| `calibration/offset_pen/cloud_offset_test.aesl` | Standalone cloud drawing that accounts for a pen forward and right of the wheel axle. |
 | `sim_victim.aesl` | A wandering robot for Shin-chan to chase in the simulator. |
 
-All drawing assumes a pen in the robot's centre hole: the line on the paper is the path of the robot's centre.
+`shinchan_bot.aesl`, `shinchan_drawings.aesl`, and the cloud inside `shinchan_shy.aesl` assume a centered pen. The standalone offset-pen cloud uses a separate pen-tip motion calculation. See [the handoff](handoff.md) for current parameters and integration status.
 
 ---
 
@@ -143,6 +145,40 @@ DRAWING TIMER (only while BORED), one step each time it fires:
         spin:     left 150, right -150, for t90 ms
     after step 12, or if no longer BORED: stop the timer; if still BORED, state = SEARCH
 ```
+
+---
+
+## shinchan_shy.aesl
+
+The shy program is separate from the hunter bot. `state` is 1 EXPLORE, 2 DRAW, or 3 AVOID; a maneuver remains in EXPLORE. `timer.period[0] = 100` provides the exploration clock, while timer 1 sequences cloud arcs, turns, wiggles, and escape phases without blocking sensor events.
+
+```text
+START -> EXPLORE
+  front moderately close -> maneuver toward the less occupied side, up to 3 s
+  rear moderately close -> move forward faster
+  8 s of exploration with a clear path -> DRAW cloud
+
+ANY ACTIVE STATE:
+  sustained dark ground, very close front, or rapid front approach
+    -> AVOID: backward wiggle -> 180-degree turn -> forward shot
+  very close or rapidly approaching rear
+    -> AVOID: forward wiggle -> forward shot
+  front hazard during an escape -> BLOCKED -> backward wiggle -> 90-degree turn
+    toward the less occupied side -> forward shot; repeat if blocked again
+  front and rear both occupied -> wait for rear clearance before retreating
+
+DRAW: six counterclockwise semicircles with clockwise turns between them;
+      a hazard interrupts the cloud, and the next draw starts from arc 1.
+CENTER: pause or resume. A paused escape stops the motors.
+```
+
+The apparent closing-rate cue compares raw proximity values across about three sensor updates. It does not estimate object speed in physical units. Two consecutive rapid rises are required. A slow front approach gets a steering attempt first; a failed attempt or hard threshold starts escape. The ground edge needs ten consecutive low readings in normal movement and two during an escape. The drawing code uses centered-pen radii and in-place turns, so it does not yet draw the intended cloud with a rigid offset pen.
+
+`shinchan_submit.aesl` uses the same three escape variations. WANDER replaces EXPLORE, SHIVER replaces wiggle, and DRAW is a stationary one-second placeholder. Both programs use `turn_180_ms = 1200` and `turn_90_ms = 600` as starting estimates for turns at motor targets of magnitude 500.
+
+## Offset-pen cloud test
+
+`calibration/offset_pen/cloud_offset_test.aesl` keeps a running estimate of robot heading. Every 50 ms it takes the desired tangent of the next cloud semicircle, resolves that pen-tip velocity into forward and sideways components relative to the robot, and sets both wheel targets. For forward pen offset `f`, right offset `r`, axle speed `v`, and angular speed `w`, pen-tip velocity is `(v + r*w)` forward and `f*w` left. The script solves these equations for wheel commands, so it does not pivot in place at each lobe join. It has no sensor feedback for the drawn line or actual heading; motor lag, slip, and pen drag can change the result. This standalone sketch does not include the shy bot's exploration and avoidance logic.
 
 ---
 

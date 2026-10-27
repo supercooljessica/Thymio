@@ -41,7 +41,8 @@ var wiggle_speed = 300
 var swerve_magnitude = 300
 var wiggle_step_time = 50
 var wiggle_steps = 25
-var turn_time = 1200       # 180 degrees at 500, -500; tune on the robot
+var turn_180_ms = 1200   # at 500, -500; tune on the robot
+var turn_90_ms = 600     # at +/-500; tune separately if needed
 var shot_time = 1000
 var shot_speed = 500
 
@@ -92,7 +93,7 @@ var raw_arc_ms = 0
 var arc_ms = 0
 var turn_ms = 0
 
-var avoid_kind = 0         # 1 front/edge, 2 rear
+var avoid_kind = 0         # 1 front: 180, 2 rear: 0, 3 blocked front: 90
 var avoid_phase = 0        # 1 wiggle, 2 turn, 3 shot, 4 blocked
 var wiggle_index = 0
 var wiggle_left = 0
@@ -185,6 +186,9 @@ sub block_motion
 timer.period[1] = 0
 motor.left.target = 0
 motor.right.target = 0
+if state == 3 and avoid_phase != 4 then
+	avoid_kind = 3
+end
 state = 3
 avoid_phase = 4
 clear_samples = 0
@@ -199,7 +203,7 @@ else
 	wiggle_left = wiggle_speed - swerve_magnitude
 	wiggle_right = wiggle_speed + swerve_magnitude
 end
-if avoid_kind == 1 then
+if avoid_kind != 2 then
 	wiggle_left = -wiggle_left
 	wiggle_right = -wiggle_right
 end
@@ -274,6 +278,13 @@ if button.center == 1 then
 	else
 		paused = 0
 		if front_peak >= front_hard or rear_peak >= rear_hard or edge_confirmed == 1 or (front_peak >= front_threshold and rear_peak >= rear_threshold) then
+			if state != 3 then
+				if front_peak >= front_clear or edge_confirmed == 1 then
+					avoid_kind = 1
+				else
+					avoid_kind = 2
+				end
+			end
 			callsub block_motion
 		else
 			callsub resume_explore
@@ -355,17 +366,27 @@ end
 if paused == 0 then
 	if state == 3 then
 		if avoid_phase == 4 then
-			# Remain stopped until all directions are clear for three readings.
-			if front_peak < front_clear and rear_peak < rear_clear and edge_fast == 0 then
+			# A blocked front escape retries with a 90-degree turn.
+			if front_peak >= front_clear or edge_fast == 1 then
+				clear_samples = 0
+				if rear_peak < rear_threshold then
+					if avoid_kind != 1 then
+						avoid_kind = 3
+					end
+					callsub start_avoid
+				end
+			elseif rear_peak >= rear_threshold then
+				clear_samples = 0
+				avoid_kind = 2
+				callsub start_avoid
+			else
 				clear_samples += 1
 				if clear_samples >= 3 then
 					callsub resume_explore
 				end
-			else
-				clear_samples = 0
 			end
 		elseif avoid_phase == 1 then
-			if (avoid_kind == 1 and rear_peak >= rear_threshold) or (avoid_kind == 2 and (front_peak >= front_threshold or edge_fast == 1)) then
+			if (avoid_kind != 2 and rear_peak >= rear_threshold) or (avoid_kind == 2 and (front_peak >= front_threshold or edge_fast == 1)) then
 				callsub block_motion
 			end
 		elseif avoid_phase == 2 then
@@ -378,17 +399,17 @@ if paused == 0 then
 			end
 		end
 	elseif edge_confirmed == 1 or front_peak >= front_hard or front_fast_hits >= 2 then
+		avoid_kind = 1
 		if rear_peak >= rear_threshold then
 			callsub block_motion
 		else
-			avoid_kind = 1
 			callsub start_avoid
 		end
 	elseif rear_peak >= rear_hard or rear_fast_hits >= 2 then
+		avoid_kind = 2
 		if front_peak >= front_clear or edge_fast == 1 then
 			callsub block_motion
 		else
-			avoid_kind = 2
 			callsub start_avoid
 		end
 	elseif front_peak >= front_threshold or maneuver_active == 1 then
@@ -424,6 +445,7 @@ if paused == 0 and state == 1 and seen_prox == 1 then
 			if front_peak < front_threshold then
 				callsub finish_maneuver
 			elseif rear_peak >= rear_threshold then
+				avoid_kind = 1
 				callsub block_motion
 			else
 				avoid_kind = 1
@@ -471,14 +493,27 @@ if paused == 0 then
 			wiggle_index += 1
 			if wiggle_index < wiggle_steps then
 				callsub start_wiggle_step
-			elseif avoid_kind == 1 then
+			elseif avoid_kind != 2 then
 				if rear_peak >= rear_threshold or edge_confirmed == 1 then
 					callsub block_motion
 				else
 					avoid_phase = 2
-					motor.left.target = 500
-					motor.right.target = -500
-					timer.period[1] = turn_time
+					if avoid_kind == 1 then
+						motor.left.target = 500
+						motor.right.target = -500
+						timer.period[1] = turn_180_ms
+					else
+						left_space = prox.horizontal[0] + prox.horizontal[1]
+						right_space = prox.horizontal[3] + prox.horizontal[4]
+						if right_space >= left_space then
+							maneuver_side = 1
+						else
+							maneuver_side = -1
+						end
+						motor.left.target = -maneuver_side * 500
+						motor.right.target = maneuver_side * 500
+						timer.period[1] = turn_90_ms
+					end
 				end
 			else
 				callsub start_shot
