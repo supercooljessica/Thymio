@@ -38,15 +38,10 @@ var maneuver_steer = 90
 var maneuver_timeout_ticks = 30  # 3 seconds at 100 ms per timer0 event
 var explore_ticks_to_draw = 80  # timer0 is 100 ms, so 80 ticks = 8 seconds
 
-var unit_mm = 20            # cloud coordinate scale
-var half_wheelbase_mm = 47
-var cloud_outer_speed = 150
-var t90_ccw = 1620
-var t90_cw = 1620
-var arc_time_percent = 100
-var settle_ms = 200
-var radius_factors[6] = [707, 1000, 1118, 1414, 1000, 1118]
-var turn_tenths[5] = [1350, 1534, 716, 1350, 1166]
+var pen_speed = 900
+var pen_side = -20
+var pen_turn = -953
+var cloud_steps[18] = [31, -7663, 1057, 44, 372, 745, 49, 5177, 669, 62, 24840, 529, 44, -32396, 745, 49, -20892, 669]
 
 var wiggle_speed = 300
 var swerve_magnitude = 300
@@ -90,18 +85,23 @@ var edge_confirmed = 0
 var edge_fast = 0
 var clear_samples = 0
 
-var draw_phase = 0         # 1 settle, 2 arc, 3 settle, 4 turn, 5 settle
-var arc_index = 0
-var radius_factor = 0
-var turn_tenths_now = 0
-var radius_mm = 0
-var radius_minus_wheelbase = 0
-var radius_plus_wheelbase = 0
-var cloud_inner_speed = 0
-var speed_gap = 0
-var raw_arc_ms = 0
-var arc_ms = 0
-var turn_ms = 0
+var cloud_index = 0
+var step_count = 0
+var pause_count = 0
+var pen_dir = 0
+var pen_dir_step = 0
+var heading = 0
+var heading_rest = 0
+var left_rest = 0
+var right_rest = 0
+var angle = 0
+var sin_angle = 0
+var cos_angle = 0
+var forward_part = 0
+var side_part = 0
+var turn_part = 0
+var left_speed = 0
+var right_speed = 0
 
 var avoid_kind = 0         # 1 front/edge, 2 rear
 var avoid_phase = 0        # 1 wiggle, 2 turn, 3 shot, 4 blocked
@@ -145,7 +145,6 @@ end
 sub resume_explore
 timer.period[1] = 0
 state = 1
-draw_phase = 0
 avoid_phase = 0
 explore_ticks = 0
 wander_sign = 1
@@ -166,7 +165,6 @@ callsub drive_to_empty_space
 sub start_maneuver
 if state == 2 then
 	timer.period[1] = 0
-	draw_phase = 0
 	explore_ticks = 0
 end
 state = 1
@@ -232,7 +230,6 @@ timer.period[1] = wiggle_step_time
 sub start_avoid
 timer.period[1] = 0
 state = 3
-draw_phase = 0
 maneuver_active = 0
 avoid_phase = 1
 wiggle_index = 0
@@ -254,25 +251,56 @@ timer.period[1] = 0
 motor.left.target = 0
 motor.right.target = 0
 state = 2
-arc_index = 0
-draw_phase = 1
+cloud_index = 0
+step_count = 0
+pause_count = 6
+heading = 0
+heading_rest = 0
+left_rest = 0
+right_rest = 0
 maneuver_active = 0
 call leds.top(0, 20, 20)
-timer.period[1] = settle_ms
+timer.period[1] = 50
 
-sub start_cloud_arc
-radius_factor = radius_factors[arc_index]
-call math.muldiv(radius_mm, unit_mm, radius_factor, 1000)
-radius_minus_wheelbase = radius_mm - half_wheelbase_mm
-radius_plus_wheelbase = radius_mm + half_wheelbase_mm
-call math.muldiv(cloud_inner_speed, cloud_outer_speed, radius_minus_wheelbase, radius_plus_wheelbase)
-speed_gap = cloud_outer_speed - cloud_inner_speed
-call math.muldiv(raw_arc_ms, t90_ccw, 600, speed_gap)
-call math.muldiv(arc_ms, raw_arc_ms, arc_time_percent, 100)
-draw_phase = 2
-motor.left.target = cloud_inner_speed
-motor.right.target = cloud_outer_speed
-timer.period[1] = arc_ms
+sub cloud_step
+if step_count > 0 then
+	angle = pen_dir - heading
+	call math.sin(sin_angle, angle)
+	call math.cos(cos_angle, angle)
+	call math.muldiv(forward_part, cos_angle, pen_speed, 32767)
+	call math.muldiv(side_part, sin_angle, pen_side, 32767)
+	forward_part += side_part
+	call math.muldiv(turn_part, sin_angle, pen_turn, 32767)
+	left_rest += forward_part - turn_part
+	right_rest += forward_part + turn_part
+	left_speed = left_rest / 10
+	right_speed = right_rest / 10
+	left_rest -= left_speed * 10
+	right_rest -= right_speed * 10
+	motor.left.target = left_speed
+	motor.right.target = right_speed
+	heading_rest += (right_speed - left_speed) * 86
+	turn_part = heading_rest / 49
+	heading += turn_part
+	heading_rest -= turn_part * 49
+	pen_dir += pen_dir_step
+	step_count -= 1
+	timer.period[1] = 50
+elseif pause_count > 0 then
+	motor.left.target = 0
+	motor.right.target = 0
+	pause_count -= 1
+	timer.period[1] = 50
+elseif cloud_index &lt; 18 then
+	step_count = cloud_steps[cloud_index]
+	pen_dir = cloud_steps[cloud_index + 1]
+	pen_dir_step = cloud_steps[cloud_index + 2]
+	cloud_index += 3
+	pause_count = 6
+	timer.period[1] = 50
+else
+	callsub resume_explore
+end
 
 onevent button.center
 if button.center == 1 then
@@ -450,33 +478,7 @@ onevent timer1
 timer.period[1] = 0
 if paused == 0 then
 	if state == 2 then
-		if draw_phase == 1 then
-			callsub start_cloud_arc
-		elseif draw_phase == 2 then
-			motor.left.target = 0
-			motor.right.target = 0
-			if arc_index &lt; 5 then
-				draw_phase = 3
-				timer.period[1] = settle_ms
-			else
-				callsub resume_explore
-			end
-		elseif draw_phase == 3 then
-			turn_tenths_now = turn_tenths[arc_index]
-			call math.muldiv(turn_ms, t90_cw, turn_tenths_now, 900)
-			draw_phase = 4
-			motor.left.target = 150
-			motor.right.target = -150
-			timer.period[1] = turn_ms
-		elseif draw_phase == 4 then
-			motor.left.target = 0
-			motor.right.target = 0
-			draw_phase = 5
-			timer.period[1] = settle_ms
-		elseif draw_phase == 5 then
-			arc_index += 1
-			callsub start_cloud_arc
-		end
+		callsub cloud_step
 	elseif state == 3 then
 		if avoid_phase == 1 then
 			wiggle_index += 1

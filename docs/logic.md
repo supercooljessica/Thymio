@@ -70,7 +70,8 @@ settings (change live with "thymio set"):
     hard   = 4000    reading that means touching            (about 2 cm)
     clear  = 1500    AVOID ends once everything is below this
     bored  = 172     ticks of SEARCH (17.2 s) before drawing
-    t90, cm          drawing timings: ms per 90 degree turn, ms per cm
+    kc, kb, kw       pen steering: 10 x pen speed 90, and the pen position
+                     (4.5 cm straight behind the centre hole); see README
 
 start: state = SEARCH
 
@@ -134,14 +135,19 @@ EVERY SENSOR TICK (10 times a second):
 
     if not BORED: set the wheels to drive + turn (left) and drive - turn (right)
 
-DRAWING TIMER (only while BORED), one step each time it fires:
-    underpants = 12 steps: a move, then a 90 degree right spin, six times
-        moves: straight 120 mm, straight 40 mm, quarter arc, straight 25 mm,
-               quarter arc, straight 40 mm
-        straight: both wheels 150 for mm * cm / 10 ms
-        arc:      left wheel stopped, right 150, for 2 * t90 ms
-        spin:     left 150, right -150, for t90 ms
-    after step 12, or if no longer BORED: stop the timer; if still BORED, state = SEARCH
+DRAWING TIMER (only while BORED), every 50 ms; the pen is behind the robot,
+so the program steers the pen tip, not the robot:
+    underpants = 6 parts from tab: straight 120 mm, straight 40 mm, quarter arc,
+                 straight 25 mm, quarter arc, straight 40 mm; a 0.3 s stop after each
+    each part: n steps, the direction the pen should move, and how much that
+               direction changes per step (0 for straight parts)
+    each step:
+        d = pen direction - robot heading (the heading is counted from the wheel
+            speeds the program sets, starting at 0 when the drawing starts)
+        forward = kc * cos d + kb * sin d,  turn = kw * sin d
+        left = forward - turn, right = forward + turn   (in tenths, remainders kept)
+        heading += (right - left) * 86 / 49
+    after the last part, or if no longer BORED: stop the timer; if still BORED, state = SEARCH
 ```
 
 ---
@@ -176,7 +182,10 @@ STEP TIMER:
                            spin left 90 degrees (t90)
                            quarter arc
                            spin left 162 degrees (t90 * 9 / 5)
-        underpants (12):   same steps as in shinchan_bot
+        underpants (12):   a move, then a 90 degree right spin, six times:
+                           straight 120, 40 mm, quarter arc, straight 25 mm,
+                           quarter arc, straight 40 mm (straight: both wheels 150
+                           for mm * cm / 10 ms; spin: 150 / -150 for t90 ms)
         s = s + 1, run the timer again after that step's time
     else:
         wheels off, timer off

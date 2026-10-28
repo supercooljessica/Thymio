@@ -1,10 +1,10 @@
 <!DOCTYPE aesl-source>
 <network>
 <keywords flag="true"/>
-<node nodeId="1" name="thymio-II"><![CDATA[var kc = 600
-var kb = -2026
-var kw = -695
-var tab[51] = [128, -16384, 0, 43, -32768, 0, 80, 16486, 205, 27, 16384, 0, 80, 102, 205, 43, 0, 0, 47, -7843, 697, 67, 245, 489, 75, 5061, 437, 95, 24748, 345, 67, -32523, 489, 75, -21008, 437, 128, -16384, 0, 128, 22938, 0, 128, -3277, 0, 128, -29491, 0, 128, 9830, 0]
+<node nodeId="1" name="thymio-II"><![CDATA[var kc = 900
+var kb = -20
+var kw = -953
+var tab[51] = [83, -16384, 0, 28, -32768, 0, 52, 16542, 315, 17, 16384, 0, 52, 158, 315, 28, 0, 0, 31, -7663, 1057, 44, 372, 745, 49, 5177, 669, 62, 24840, 529, 44, -32396, 745, 49, -20892, 669, 83, -16384, 0, 83, 22938, 0, 83, -3277, 0, 83, -29491, 0, 83, 9830, 0]
 var j = 0
 var e = 0
 var n = 0
@@ -40,22 +40,28 @@ ra = 0
 timer.period[0] = 2000
 
 onevent button.forward
-j = 0
-e = 18
-call leds.top(32, 0, 32)
-callsub go
+if timer.period[0] == 0 then
+	j = 0
+	e = 18
+	call leds.top(32, 0, 32)
+	callsub go
+end
 
 onevent button.left
-j = 18
-e = 36
-call leds.top(0, 20, 20)
-callsub go
+if timer.period[0] == 0 then
+	j = 18
+	e = 36
+	call leds.top(0, 20, 20)
+	callsub go
+end
 
 onevent button.right
-j = 36
-e = 51
-call leds.top(32, 32, 0)
-callsub go
+if timer.period[0] == 0 then
+	j = 36
+	e = 51
+	call leds.top(32, 32, 0)
+	callsub go
+end
 
 onevent button.center
 e = 0
@@ -78,10 +84,10 @@ if n > 0 then
 	ra -= r * 10
 	motor.left.target = l
 	motor.right.target = r
-	hq += (r - l) * 115
-	w = hq / 74
+	hq += (r - l) * 86
+	w = hq / 49
 	th += w
-	hq -= w * 74
+	hq -= w * 49
 	ph += dp
 	n -= 1
 elseif p > 0 then

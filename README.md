@@ -8,13 +8,14 @@ A Thymio that behaves like Shin-chan: it hunts down whoever is nearby, chases th
 
 | File | What it is |
 |---|---|
-| `shinchan_bot.aesl` | **The robot program.** Search, chase, taunt, avoid, and draw underpants when bored. |
-| `shinchan_shy.aesl` | Explore open space, draw small clouds, and escape front, rear, or edge hazards. |
+| `shinchan_bot.aesl` | **The robot program.** Search, chase, taunt, avoid, and draw underpants when bored, with the pen 4.5 cm straight behind the centre hole. |
+| `shinchan_shy.aesl` | Explore open space, draw small clouds (pen 4.5 cm straight behind the centre hole), and escape front, rear, or edge hazards. |
 | `shinchan_drawings.aesl` | Drawing only: a button picks a spiral, a flower or underpants. |
 | `shinchan_calibrate.aesl` | Calibration drawings for the real robot: a line, two squares, three loops. |
 | `shinchan_shapes_test.aesl` | Test drawings on the real robot: underpants, cloud and star, about 12 cm each. |
-| `shinchan_shapes_offset.aesl` | The same three shapes for a pen mounted outside the robot (15.3 cm left, 4.5 cm back). |
-| `shinchan_calibrate_side.aesl` | Calibration tests drawn with the side pen: fast lines, turn circles, slow lines. |
+| `shinchan_shapes_offset.aesl` | The same three shapes for a pen mounted outside the centre hole (4.5 cm straight behind it). |
+| `shinchan_calibrate_side.aesl` | Calibration tests for the earlier side pen (15 cm left): fast lines, turn circles, slow lines. |
+| `shinchan_calibrate_offset.aesl` | The outside-pen shape program drawing a line, two squares and three circles, to calibrate it. |
 | `sim_victim.aesl` | A simple wandering robot for Shin-chan to chase in the simulator. |
 | `playgrounds/arena.playground` | Simulator arena: empty 2 × 2 m square, four robot-sized cylinders, Shin-chan in the middle. |
 | `playgrounds/arena_chase.playground` | Same arena with a second Thymio (`victim`) 45 cm ahead of Shin-chan. |
@@ -27,8 +28,9 @@ A Thymio that behaves like Shin-chan: it hunts down whoever is nearby, chases th
 | `docs/shapes_preview.svg` | What the shape test draws on our calibrated robot, to scale. |
 | `docs/shapes_a4_placement.svg` | Where to start each shape of the shape test on a landscape A4 sheet. |
 | `docs/cloud_preview.svg` | The shy bot's cloud on our robot, after calibration and before. |
-| `docs/shapes_offset_preview.svg` | The side-pen shape test: drawings, start position and the space the robot sweeps. |
+| `docs/shapes_offset_preview.svg` | The outside-pen shape test: drawings, start position and the paper each shape needs. |
 | `docs/calibration_side_expected.svg` | What the side-pen calibration tests draw on a calibrated robot, with the paper each needs. |
+| `docs/calibration_offset_expected.svg` | What the outside-pen line, squares and circles test draws, with start points and the paper each needs. |
 | `docs/arena_floor.svg` | Editable source of the arena floor. |
 | `docs/instructions_prompts.rtf` | The original assignment prompts. |
 | `tools/thymio.py`, `tools/trail.py` | Command-line helper (see below). |
@@ -116,9 +118,9 @@ Settings at the top of the file; `thymio set` changes them while it runs. The fi
 | `hard` | 4000 | Touching (about 2 cm) |
 | `clear` | 1500 | Everything below this ends AVOID |
 | `bored` | 172 | Ticks (0.1 s) of searching before drawing underpants |
-| `t90`, `cm` | 1620, 214 | Drawing timing, as in the drawing program below |
+| `kc`, `kb`, `kw` | 900, -20, -953 | Pen steering for the pen 4.5 cm straight behind the centre hole, as in `shinchan_shapes_offset.aesl` below |
 
-`t90` and `cm` were measured on our real robot on paper. The simulator's robot is a little faster, so use `thymio set t90=1482 cm=201` there.
+The pen sits behind the robot, so while drawing the program steers the pen tip every 50 ms and the robot's body swings round as needed (same method and numbers as the outside-pen shape test). These were measured on our real robot on paper; the drawing takes about 15 s and needs about 27 × 28 cm.
 
 ## The shy bot (`shinchan_shy.aesl`)
 
@@ -126,7 +128,7 @@ The shy bot explores open space for eight seconds, then draws the six-semicircle
 
 The main states are explore (green, or yellow while maneuvering), draw (cyan), and avoid (red). Orange means a hazard blocked the planned escape; the robot waits stopped until the front, rear, and ground readings are clear for three sensor updates. The center button pauses (blue) or resumes. During an escape, a newly detected hazard stops the robot instead of launching another escape immediately.
 
-Settings near the top include `front_threshold`, `front_hard`, `rear_threshold`, `rear_hard`, `fast_rise`, `maneuver_fast_rise`, `maneuver_timeout_ticks`, `white_min`, `edge_samples`, `unit_mm`, `t90_ccw`, `t90_cw`, and the wiggle, turn, and shot timings. `fast_rise` is a rise in raw IR readings over roughly three sensor updates; it is an apparent closing-rate cue, not a measurement of an object's speed in millimetres per second. Two consecutive rising readings are required, and the threshold is higher while maneuvering because turning also changes the readings. The normal ground debounce is ten readings, as in the edge test; the faster escape motions use a two-reading edge stop. Try it first with the pen raised and enough room around the robot, then adjust the thresholds and timing on the actual surface.
+Settings near the top include `front_threshold`, `front_hard`, `rear_threshold`, `rear_hard`, `fast_rise`, `maneuver_fast_rise`, `maneuver_timeout_ticks`, `white_min`, `edge_samples`, the pen steering `pen_speed`, `pen_side`, `pen_turn` (same as `kc`, `kb`, `kw` in the robot program; the cloud is the 6-arc cloud of the shape test), and the wiggle, turn, and shot timings. `fast_rise` is a rise in raw IR readings over roughly three sensor updates; it is an apparent closing-rate cue, not a measurement of an object's speed in millimetres per second. Two consecutive rising readings are required, and the threshold is higher while maneuvering because turning also changes the readings. The normal ground debounce is ten readings, as in the edge test; the faster escape motions use a two-reading edge stop. Try it first with the pen raised and enough room around the robot, then adjust the thresholds and timing on the actual surface.
 
 ## The drawing program (`shinchan_drawings.aesl`)
 
@@ -186,17 +188,24 @@ The light is purple, cyan or yellow while drawing and goes off when the shape is
 
 To start from the computer instead of the buttons: `thymio set i=0 e=33 timer.period=2000,0` (underpants), `i=33 e=69` (cloud), `i=69 e=96` (star), each with `timer.period=2000,0`.
 
-## Shape test with the side pen (`shinchan_shapes_offset.aesl`)
+## Shape test with the outside pen (`shinchan_shapes_offset.aesl`)
 
-The same three shapes, for a pen mounted outside the robot: 15.3 cm to the left of the centre hole and 4.5 cm behind it (measured with the side-pen calibration). Spinning on the spot would swing that pen along a big arc. Instead, every 50 ms the program works out the robot's heading and picks wheel speeds that move the **pen tip** along the shape; the robot's body swings around as needed. Preview with the start position and the space the robot needs: [`docs/shapes_offset_preview.svg`](docs/shapes_offset_preview.svg).
+The same three shapes, for a pen fixed outside the centre hole: **4.5 cm straight behind it**, in a printed sleeve (since 2026-10-28; before that the pen sat 15 cm to the left, then 4–5 cm behind and 5 cm to the right, where every corner made the robot swing round one wheel). Spinning on the spot would swing that pen along an arc. Instead, every 50 ms the program works out the robot's heading and picks wheel speeds that move the **pen tip** along the shape; the robot's body swings around as needed. Preview with the start position and the paper each shape needs: [`docs/shapes_offset_preview.svg`](docs/shapes_offset_preview.svg).
 
-- Same buttons and lights as the shape test. All shapes start with the robot **facing up** (away from you) and the pen tip on the shape's start point. Underpants: top-left corner of the waistband. Cloud: right side. Star: left end of the top bar.
-- The robot circles around each drawing, so leave about 55 × 55 cm of paper per shape.
-- `kc`, `kb` and `kw` at the top come from the pen position and the side-pen calibration: `kc` = 10 × pen speed 60; `kb` = 10 × 60 × left ÷ forward offset; `kw` = 10 × 60 × 104.7 mm ÷ (2 × forward offset), where 104.7 mm = speed ÷ turn rate measured with the side pen. The heading update `(r - l) * 115 / 74` is the turn per step per unit of wheel difference. If the pen moves, `kb` and `kw` change; the table describes the pen's path and stays the same.
+| Button | Shape | Paper | Pen start: from the left edge, from the bottom edge | Time |
+|---|---|---|---|---|
+| Forward | Underpants (start: top-left corner of the waistband) | 27 × 28 cm | 9 cm, 14 cm | 15 s |
+| Left | Cloud (start: its right side) | 28 × 29 cm | 18 cm, 13 cm | 16 s |
+| Right | Star (start: left end of the top bar) | 32 × 26 cm | 9 cm, 12 cm | 22 s |
+| Centre | Stop | | | |
+
+- Same lights as the shape test. All shapes start with the robot **facing up** (away from you) and the pen tip on the shape's start point. The paper sizes include the robot's body swinging around the drawing.
+- While a shape is drawing, Forward, Left and Right do nothing (a stray touch used to restart the drawing); Centre still stops it.
+- `kc`, `kb` and `kw` at the top come from the pen position and the calibration: `kc` = 10 × pen speed 90; `kb` = 10 × 90 × sideways offset ÷ forward offset; `kw` = 10 × 90 × 95.3 mm ÷ (2 × forward offset). Offsets are in mm from the centre hole, left and forward positive: now +1 and −45. 95.3 mm = speed ÷ turn rate for turns on the spot, from the spin test with the printed pen sleeve. With the pen straight behind the centre, `kb` is almost 0 and every corner starts as a turn on the spot. The heading update `(r - l) * 86 / 49` is the turn per step per unit of wheel difference. If the pen moves, only `kb` and `kw` change. The tables use 0.321 mm per wheel unit per second; if the pen speed changes, the table changes too.
 
 ## Calibrating with the side pen (`shinchan_calibrate_side.aesl`)
 
-Tests for the robot with the side pen and its extra weight, with no pen in the centre hole. A turn on the spot swings the side pen along a 15.7 cm-radius arc around the centre hole, so these tests use turns as circles to measure. Preview with the paper each test needs: [`docs/calibration_side_expected.svg`](docs/calibration_side_expected.svg).
+For the earlier side pen, 15 cm to the left; kept for reference. Tests for the robot with the side pen and its extra weight, with no pen in the centre hole. A turn on the spot swings the side pen along a 15.7 cm-radius arc around the centre hole, so these tests use turns as circles to measure. Preview with the paper each test needs: [`docs/calibration_side_expected.svg`](docs/calibration_side_expected.svg).
 
 | Button | Test | Draws | Paper | Measures |
 |---|---|---|---|---|
@@ -206,6 +215,19 @@ Tests for the robot with the side pen and its extra weight, with no pen in the c
 | Centre | Stop | | | |
 
 Robot facing up, side pen on the start point. Start the pen 10 cm from the left edge of each test's area, 9 cm from its bottom (T1 and T3) or 20 cm (T2). On a 100 × 173 cm sheet: T1 and T3 one above the other on the left half, T2 on the right half. Photograph each test from straight above with a ruler next to it.
+
+## Calibrating the outside-pen shapes (`shinchan_calibrate_offset.aesl`)
+
+The outside-pen shape program with the figures of the first calibration instead of the shapes: a line, two squares and three circles. The steering, `kc`, `kb`, `kw` and the heading update are the same as in `shinchan_shapes_offset.aesl`, so the figures go wrong in the same way the shapes do, but on simple figures it is easy to see how. Preview with start points and paper: [`docs/calibration_offset_expected.svg`](docs/calibration_offset_expected.svg).
+
+| Button | Test | The pen draws | Paper | Pen start: from the left edge, from the bottom edge | Time |
+|---|---|---|---|---|---|
+| Forward | T1 line | One line to the right: 3, 6 and 12 cm, with an ink dot between the parts | 32 × 21 cm | 9 cm, 7 cm | 10 s |
+| Left | T2 squares | Two 12 cm squares touching at the start: up-right with right turns, then down-left with left turns | 41 × 46 cm | 20 cm, 20 cm | 36 s |
+| Right | T3 circles | A line to the right with three circles sitting on it, 3, 6 and 9 cm across, each drawn counter-clockwise | 41 × 30 cm | 11 cm, 14 cm | 29 s |
+| Centre | Stop | | | | |
+
+Robot facing up (towards the top edge of the paper, square to it), pen tip on the start point, battery full. While a test is drawing, Forward, Left and Right do nothing; Centre still stops it. The light is green, blue or purple while drawing. The paper sizes include the robot's body swinging around the drawing. To start from the computer: `./thymio.sh set j=0 e=21 n=0 p=0 th=0 hq=0 la=0 ra=0 timer.period=2000,0` (T1), with `j=21 e=42` (T2) or `j=42 e=63` (T3). How the photos are used: [`docs/calibration.md`](docs/calibration.md#side-pen-shapes-line-squares-and-circles-2026-10-28-shinchan_calibrate_offsetaesl).
 
 ## Working with Claude Code
 

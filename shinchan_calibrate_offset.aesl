@@ -1,0 +1,111 @@
+<!DOCTYPE aesl-source>
+<network>
+<keywords flag="true"/>
+<node nodeId="1" name="thymio-II"><![CDATA[var kc = 900
+var kb = -20
+var kw = -953
+var tab[63] = [21, -16384, 0, 0, 0, 0, 0, 0, 0, 42, -16384, 0, 0, 0, 0, 0, 0, 0, 83, -16384, 0, 83, 0, 0, 83, -16384, 0, 83, -32768, 0, 166, 16384, 0, 83, -32768, 0, 83, -16384, 0, 83, 0, 0, 21, -16384, 0, 65, -15880, 1008, 42, -16384, 0, 131, -16134, 500, 62, -16384, 0, 196, -16217, 334, 21, -16384, 0]
+var j = 0
+var e = 0
+var n = 0
+var p = 0
+var ph = 0
+var dp = 0
+var th = 0
+var hq = 0
+var la = 0
+var ra = 0
+var d
+var s
+var c
+var v
+var w
+var dd
+var l
+var r
+
+motor.left.target = 0
+motor.right.target = 0
+timer.period[0] = 0
+
+sub go
+motor.left.target = 0
+motor.right.target = 0
+n = 0
+p = 0
+th = 0
+hq = 0
+la = 0
+ra = 0
+timer.period[0] = 2000
+
+onevent button.forward
+if timer.period[0] == 0 then
+	j = 0
+	e = 21
+	call leds.top(0, 32, 0)
+	callsub go
+end
+
+onevent button.left
+if timer.period[0] == 0 then
+	j = 21
+	e = 42
+	call leds.top(0, 0, 32)
+	callsub go
+end
+
+onevent button.right
+if timer.period[0] == 0 then
+	j = 42
+	e = 63
+	call leds.top(32, 0, 32)
+	callsub go
+end
+
+onevent button.center
+e = 0
+callsub go
+
+onevent timer0
+if n > 0 then
+	d = ph - th
+	call math.sin(s, d)
+	call math.cos(c, d)
+	call math.muldiv(v, c, kc, 32767)
+	call math.muldiv(w, s, kb, 32767)
+	v += w
+	call math.muldiv(dd, s, kw, 32767)
+	la += v - dd
+	ra += v + dd
+	l = la / 10
+	r = ra / 10
+	la -= l * 10
+	ra -= r * 10
+	motor.left.target = l
+	motor.right.target = r
+	hq += (r - l) * 86
+	w = hq / 49
+	th += w
+	hq -= w * 49
+	ph += dp
+	n -= 1
+elseif p > 0 then
+	motor.left.target = 0
+	motor.right.target = 0
+	p -= 1
+elseif j < e then
+	n = tab[j]
+	ph = tab[j + 1]
+	dp = tab[j + 2]
+	j += 3
+	p = 6
+	timer.period[0] = 50
+else
+	motor.left.target = 0
+	motor.right.target = 0
+	timer.period[0] = 0
+	call leds.top(0, 0, 0)
+end
+]]></node>
+</network>
