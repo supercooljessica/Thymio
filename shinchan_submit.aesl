@@ -30,15 +30,16 @@ var white_min = 500
 var edge_samples = 10       # normal edge debounce
 var fast_edge_samples = 2   # faster stop during high-speed escape
 var wander_speed = 100
+var wander_curve = 60       # steering that makes wandering curvy
 var rear_caution_speed = 140
 var maneuver_speed = 60
 var maneuver_steer = 90
 var maneuver_timeout_ticks = 30
-var wander_ticks_to_draw = 80
+var wander_ticks_to_draw = 120
 var pen_speed = 900
 var pen_side = -20
 var pen_turn = -953
-var drawing_steps[36] = [31, -7663, 1057, 44, 372, 745, 49, 5177, 669, 62, 24840, 529, 44, -32396, 745, 49, -20892, 669, 83, -16384, 0, 28, -32768, 0, 52, 16542, 315, 17, 16384, 0, 52, 158, 315, 28, 0, 0]
+var drawing_steps[51] = [31, -7663, 1057, 44, 372, 745, 49, 5177, 669, 62, 24840, 529, 44, -32396, 745, 49, -20892, 669, 83, -16384, 0, 28, -32768, 0, 52, 16542, 315, 17, 16384, 0, 52, 158, 315, 28, 0, 0, 83, -16384, 0, 83, 22938, 0, 83, -3277, 0, 83, -29491, 0, 83, 9830, 0]  # cloud, underpants, star
 var shiver_speed = 300
 var shiver_interval_ms = 50
 var shiver_intervals = 25
@@ -58,6 +59,7 @@ var maneuver_ticks = 0
 var maneuver_side = 1
 var drive_speed = 0
 var steer = 0
+var space_steer = 0         # steering away from nearby things, without the curve
 var left_space = 0
 var right_space = 0
 var front_peak = 0
@@ -117,11 +119,12 @@ if seen_prox == 1 and front_peak &lt; hard_threshold and rear_peak &lt; hard_thr
 		if rear_peak >= obstacle_threshold then
 			drive_speed = rear_caution_speed
 		end
-		steer = (right_space - left_space) / 20 + wander_sign * 20
-		if steer > 80 then
-			steer = 80
-		elseif steer &lt; -80 then
-			steer = -80
+		space_steer = (right_space - left_space) / 20
+		steer = space_steer + wander_sign * wander_curve
+		if steer > 120 then
+			steer = 120
+		elseif steer &lt; -120 then
+			steer = -120
 		end
 	end
 	motor.left.target = drive_speed - steer
@@ -231,7 +234,10 @@ motor.right.target = 0
 state = 2
 drawing_index = next_drawing
 drawing_end = next_drawing + 18
-next_drawing = 18 - next_drawing
+if drawing_end > 51 then
+	drawing_end = 51
+end
+next_drawing = drawing_end % 51
 step_count = 0
 pause_count = 6
 heading = 0
@@ -341,7 +347,7 @@ else
 end
 
 # count rapid front approaches for avoid
-if state == 1 and (maneuver_active == 1 or (steer > -30 and steer &lt; 30)) and front_peak >= obstacle_threshold then # wander
+if state == 1 and (maneuver_active == 1 or (space_steer > -30 and space_steer &lt; 30)) and front_peak >= obstacle_threshold then # wander
 	if (maneuver_active == 0 and front_rise >= fast_rise) or (maneuver_active == 1 and front_rise >= maneuver_fast_rise) then
 		if front_fast_hits &lt; 2 then
 			front_fast_hits += 1
@@ -352,8 +358,8 @@ if state == 1 and (maneuver_active == 1 or (steer > -30 and steer &lt; 30)) and 
 else
 	front_fast_hits = 0
 end
-# count rapid rear approaches only while wandering mostly straight
-if state == 1 and maneuver_active == 0 and steer > -30 and steer &lt; 30 and rear_peak >= obstacle_threshold and rear_rise >= fast_rise then
+# count rapid rear approaches only while not steering hard away from something
+if state == 1 and maneuver_active == 0 and space_steer > -30 and space_steer &lt; 30 and rear_peak >= obstacle_threshold and rear_rise >= fast_rise then
 	if rear_fast_hits &lt; 2 then
 		rear_fast_hits += 1
 	end
@@ -465,8 +471,8 @@ end
 onevent timer0 # keep time for wandering and maneuvering
 if paused == 0 and state == 1 and seen_prox == 1 then
 	wander_ticks += 1
-	# flip the small steering bias every two seconds
-	if wander_ticks % 20 == 0 then
+	# flip the curve every three seconds
+	if wander_ticks % 30 == 0 then
 		wander_sign = -wander_sign
 	end
 	if maneuver_active == 1 then
@@ -484,7 +490,7 @@ if paused == 0 and state == 1 and seen_prox == 1 then
 			end
 		end
 	elseif wander_ticks >= wander_ticks_to_draw and front_peak &lt; obstacle_threshold and rear_peak &lt; obstacle_threshold and edge_fast == 0 then
-		# start drawing after eight seconds with a clear path
+		# start drawing after twelve seconds with a clear path
 		callsub start_drawing
 	end
 end
