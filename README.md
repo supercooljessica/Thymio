@@ -11,6 +11,10 @@ A Thymio that behaves like Shin-chan: it hunts down whoever is nearby, chases th
 | `shinchan_bot.aesl` | **The robot program.** Search, chase, taunt, avoid, and draw underpants when bored. |
 | `shinchan_shy.aesl` | Explore open space, draw small clouds, and escape front, rear, or edge hazards. |
 | `shinchan_drawings.aesl` | Drawing only: a button picks a spiral, a flower or underpants. |
+| `shinchan_calibrate.aesl` | Calibration drawings for the real robot: a line, two squares, three loops. |
+| `shinchan_shapes_test.aesl` | Test drawings on the real robot: underpants, cloud and star, about 12 cm each. |
+| `shinchan_shapes_offset.aesl` | The same three shapes for a pen mounted outside the robot (15.3 cm left, 4.5 cm back). |
+| `shinchan_calibrate_side.aesl` | Calibration tests drawn with the side pen: fast lines, turn circles, slow lines. |
 | `sim_victim.aesl` | A simple wandering robot for Shin-chan to chase in the simulator. |
 | `playgrounds/arena.playground` | Simulator arena: empty 2 × 2 m square, four robot-sized cylinders, Shin-chan in the middle. |
 | `playgrounds/arena_chase.playground` | Same arena with a second Thymio (`victim`) 45 cm ahead of Shin-chan. |
@@ -18,13 +22,20 @@ A Thymio that behaves like Shin-chan: it hunts down whoever is nearby, chases th
 | `docs/logic.md` | **How the programs work:** flowcharts and pseudo code. |
 | `docs/chase_trail.svg` | Shin-chan's and the victim's trails in the chase arena, to scale, coloured by mode. |
 | `docs/drawings_preview.png` | What the drawing program draws. |
+| `docs/calibration.md` | **Why the real robot draws differently from the simulator**, and how to calibrate it from photos. |
+| `docs/calibration_expected.svg` | What the calibration program draws on a perfect robot, to scale. |
+| `docs/shapes_preview.svg` | What the shape test draws on our calibrated robot, to scale. |
+| `docs/shapes_a4_placement.svg` | Where to start each shape of the shape test on a landscape A4 sheet. |
+| `docs/cloud_preview.svg` | The shy bot's cloud on our robot, after calibration and before. |
+| `docs/shapes_offset_preview.svg` | The side-pen shape test: drawings, start position and the space the robot sweeps. |
+| `docs/calibration_side_expected.svg` | What the side-pen calibration tests draw on a calibrated robot, with the paper each needs. |
 | `docs/arena_floor.svg` | Editable source of the arena floor. |
 | `docs/instructions_prompts.rtf` | The original assignment prompts. |
 | `tools/thymio.py`, `tools/trail.py` | Command-line helper (see below). |
 | `thymio.cmd` / `thymio.sh` | Launchers for the helper (Windows / macOS). |
-| `requirements.txt` | Python packages for the Thymio helper and serial bridge. |
+| `requirements.txt` | Python package the helper needs (`tdmclient`). |
 | `calibration/` | Pen and motion calibration sketches, grouped by centered or offset pen. |
-| `xiao_communication/` | XIAO sketches, USB communication experiments, bridges, dashboards, and setup notes. |
+| `archive/xiao_communication/` | Archived: XIAO/Arduino connection experiments, no longer used. |
 
 ## Software you need
 
@@ -105,9 +116,9 @@ Settings at the top of the file; `thymio set` changes them while it runs. The fi
 | `hard` | 4000 | Touching (about 2 cm) |
 | `clear` | 1500 | Everything below this ends AVOID |
 | `bored` | 172 | Ticks (0.1 s) of searching before drawing underpants |
-| `t90`, `cm` | 1244, 167 | Drawing timing, as in the drawing program below |
+| `t90`, `cm` | 1620, 214 | Drawing timing, as in the drawing program below |
 
-In the simulator the robot is a bit slower than these drawing defaults assume; use `thymio set t90=1482 cm=201` there.
+`t90` and `cm` were measured on our real robot on paper. The simulator's robot is a little faster, so use `thymio set t90=1482 cm=201` there.
 
 ## The shy bot (`shinchan_shy.aesl`)
 
@@ -134,12 +145,67 @@ Drawing starts 1 s after you let go of the button. In the simulator (no buttons)
 
 | Setting | Default | Meaning | How to fix it |
 |---|---|---|---|
-| `t90` | 1244 | ms for a 90° spin | Draw the flower. If the last petal lands past the first, lower `t90`; if it falls short, raise it. |
-| `cm` | 167 | ms to drive 1 cm | Draw the underpants and measure the waistband. New `cm` = `cm` × 120 ÷ measured mm. |
+| `t90` | 1620 | ms for a 90° spin | Draw the flower. If the last petal lands past the first, lower `t90`; if it falls short, raise it. |
+| `cm` | 214 | ms to drive 1 cm | Draw the underpants and measure the waistband. New `cm` = `cm` × 120 ÷ measured mm. |
 
 For the newer turn, circle, edge, and shy-motion tests, see [`calibration/`](calibration/README.md). The centered-pen turn and shape test assumes the pen is on the wheel axis; the circle and motion tests are also available for an offset pen.
 
-For XIAO and USB communication experiments, see [`xiao_communication/`](xiao_communication/README.md).
+## Calibrating the real robot (`shinchan_calibrate.aesl`)
+
+The real robot doesn't move like the simulator. All drawings are timed, so the real robot's shapes come out distorted until it is calibrated. [`docs/calibration.md`](docs/calibration.md) explains why and has the full instructions.
+
+| Button | Test | Draws |
+|---|---|---|
+| Forward | T1 line | 33 cm straight line with three stop dots |
+| Left | T2 squares | Two 12 cm squares, right turns then left turns |
+| Right | T3 loops | A line with three loops of 4.8, 9.5 and 19 cm |
+| Centre | Stop | |
+
+Pen in the centre hole. The test starts 2 s after you let go of the button. Photograph each drawing from straight above with a ruler next to it, and send the photos to Claude Code to get new `t90`/`cm` values for every program.
+
+## Shape test (`shinchan_shapes_test.aesl`)
+
+Draws the three Shin-chan shapes at about the size of a calibration square (12 cm), using only the moves the calibration measured. Preview, to scale: [`docs/shapes_preview.svg`](docs/shapes_preview.svg).
+
+| Button | Draws | Size | Time | Start with the pen at |
+|---|---|---|---|---|
+| Forward | Underpants | 11.9 × 8.6 cm | 19 s | the top-left corner of the waistband, robot facing right |
+| Left | Cloud (the shy bot's six-bump cloud) | 12.1 × 10.0 cm | 40 s | the right side of the cloud, robot facing right. It first turns 45° left on the spot |
+| Right | Star | 11.7 × 11.2 cm | 23 s | the left end of the star's top bar, robot facing right |
+| Centre | Stop | | | |
+
+The light is purple, cyan or yellow while drawing and goes off when the shape is done. The drawing starts 2 s after you let go of the button. `cm` and `t90` sit at the top of the file, as in the other programs.
+
+**On A4:** lay the sheet in **landscape** (long side left to right) and tape it down. Put the pen tip at the start point below, with the robot facing the right edge. Each shape then sits in the middle of the sheet and the wheels stay on the paper. Picture: [`docs/shapes_a4_placement.svg`](docs/shapes_a4_placement.svg).
+
+| Shape | Pen start: from the left edge | from the top edge |
+|---|---|---|
+| Underpants | 9.0 cm | 6.2 cm |
+| Cloud | 19.6 cm | 9.5 cm |
+| Star | 9.0 cm | 9.2 cm |
+
+To start from the computer instead of the buttons: `thymio set i=0 e=33 timer.period=2000,0` (underpants), `i=33 e=69` (cloud), `i=69 e=96` (star), each with `timer.period=2000,0`.
+
+## Shape test with the side pen (`shinchan_shapes_offset.aesl`)
+
+The same three shapes, for a pen mounted outside the robot: 15.3 cm to the left of the centre hole and 4.5 cm behind it (measured with the side-pen calibration). Spinning on the spot would swing that pen along a big arc. Instead, every 50 ms the program works out the robot's heading and picks wheel speeds that move the **pen tip** along the shape; the robot's body swings around as needed. Preview with the start position and the space the robot needs: [`docs/shapes_offset_preview.svg`](docs/shapes_offset_preview.svg).
+
+- Same buttons and lights as the shape test. All shapes start with the robot **facing up** (away from you) and the pen tip on the shape's start point. Underpants: top-left corner of the waistband. Cloud: right side. Star: left end of the top bar.
+- The robot circles around each drawing, so leave about 55 × 55 cm of paper per shape.
+- `kc`, `kb` and `kw` at the top come from the pen position and the side-pen calibration: `kc` = 10 × pen speed 60; `kb` = 10 × 60 × left ÷ forward offset; `kw` = 10 × 60 × 104.7 mm ÷ (2 × forward offset), where 104.7 mm = speed ÷ turn rate measured with the side pen. The heading update `(r - l) * 115 / 74` is the turn per step per unit of wheel difference. If the pen moves, `kb` and `kw` change; the table describes the pen's path and stays the same.
+
+## Calibrating with the side pen (`shinchan_calibrate_side.aesl`)
+
+Tests for the robot with the side pen and its extra weight, with no pen in the centre hole. A turn on the spot swings the side pen along a 15.7 cm-radius arc around the centre hole, so these tests use turns as circles to measure. Preview with the paper each test needs: [`docs/calibration_side_expected.svg`](docs/calibration_side_expected.svg).
+
+| Button | Test | Draws | Paper | Measures |
+|---|---|---|---|---|
+| Forward | T1 fast lines | Forward 3, 6, 12 cm at 150 and 12 cm at 300 with stop dots, a half circle (180° turn), then the same backwards on a parallel line about 30 cm away | 49 × 93 cm | Speed forward and backward, start lag, the pen's sideways distance |
+| Left | T2 turn circles | Four 90° right turns (two fast, two slow) with a dot after each: a 31 cm circle. Then 40 cm straight and four 90° left turns | 49 × 89 cm | Right and left turn times at speeds 150 and 60, the pen's exact distance from the centre hole |
+| Right | T3 slow lines | Like T1 at speed 60: 4, 7, 15 cm forward, 180° turn, the same backwards | 49 × 79 cm | Speed at slow wheel speeds, which the side-pen drawings use a lot |
+| Centre | Stop | | | |
+
+Robot facing up, side pen on the start point. Start the pen 10 cm from the left edge of each test's area, 9 cm from its bottom (T1 and T3) or 20 cm (T2). On a 100 × 173 cm sheet: T1 and T3 one above the other on the left half, T2 on the right half. Photograph each test from straight above with a ruler next to it.
 
 ## Working with Claude Code
 

@@ -1,3 +1,5 @@
+> **Archived (2026-10-27).** The team no longer connects the Thymio to an Arduino/XIAO. These scripts need `pip install pyserial==3.5 thymiodirect==0.1.2`, which were removed from the main `requirements.txt`. Paths in these guides still say `xiao_communication/`; read them as `archive/xiao_communication/`.
+
 # XIAO and USB communication
 
 This folder collects the XIAO firmware and the Thymio-to-XIAO communication experiments. Run the Python commands in the linked guides from the Thymio repository root unless a guide says otherwise. The shared Python dependencies are in `../requirements.txt`.

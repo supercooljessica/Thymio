@@ -1,0 +1,105 @@
+<!DOCTYPE aesl-source>
+<network>
+<keywords flag="true"/>
+<node nodeId="1" name="thymio-II"><![CDATA[var kc = 600
+var kb = -2026
+var kw = -695
+var tab[51] = [128, -16384, 0, 43, -32768, 0, 80, 16486, 205, 27, 16384, 0, 80, 102, 205, 43, 0, 0, 47, -7843, 697, 67, 245, 489, 75, 5061, 437, 95, 24748, 345, 67, -32523, 489, 75, -21008, 437, 128, -16384, 0, 128, 22938, 0, 128, -3277, 0, 128, -29491, 0, 128, 9830, 0]
+var j = 0
+var e = 0
+var n = 0
+var p = 0
+var ph = 0
+var dp = 0
+var th = 0
+var hq = 0
+var la = 0
+var ra = 0
+var d
+var s
+var c
+var v
+var w
+var dd
+var l
+var r
+
+motor.left.target = 0
+motor.right.target = 0
+timer.period[0] = 0
+
+sub go
+motor.left.target = 0
+motor.right.target = 0
+n = 0
+p = 0
+th = 0
+hq = 0
+la = 0
+ra = 0
+timer.period[0] = 2000
+
+onevent button.forward
+j = 0
+e = 18
+call leds.top(32, 0, 32)
+callsub go
+
+onevent button.left
+j = 18
+e = 36
+call leds.top(0, 20, 20)
+callsub go
+
+onevent button.right
+j = 36
+e = 51
+call leds.top(32, 32, 0)
+callsub go
+
+onevent button.center
+e = 0
+callsub go
+
+onevent timer0
+if n > 0 then
+	d = ph - th
+	call math.sin(s, d)
+	call math.cos(c, d)
+	call math.muldiv(v, c, kc, 32767)
+	call math.muldiv(w, s, kb, 32767)
+	v += w
+	call math.muldiv(dd, s, kw, 32767)
+	la += v - dd
+	ra += v + dd
+	l = la / 10
+	r = ra / 10
+	la -= l * 10
+	ra -= r * 10
+	motor.left.target = l
+	motor.right.target = r
+	hq += (r - l) * 115
+	w = hq / 74
+	th += w
+	hq -= w * 74
+	ph += dp
+	n -= 1
+elseif p > 0 then
+	motor.left.target = 0
+	motor.right.target = 0
+	p -= 1
+elseif j < e then
+	n = tab[j]
+	ph = tab[j + 1]
+	dp = tab[j + 2]
+	j += 3
+	p = 6
+	timer.period[0] = 50
+else
+	motor.left.target = 0
+	motor.right.target = 0
+	timer.period[0] = 0
+	call leds.top(0, 0, 0)
+end
+]]></node>
+</network>

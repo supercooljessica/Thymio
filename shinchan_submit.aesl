@@ -39,10 +39,10 @@ var maneuver_timeout_ticks = 30  # 3 seconds at 100 ms per timer0 event
 var explore_ticks_to_draw = 80  # timer0 is 100 ms, so 80 ticks = 8 seconds
 
 var unit_mm = 20            # cloud coordinate scale
-var half_wheelbase_mm = 50
+var half_wheelbase_mm = 47
 var cloud_outer_speed = 150
-var t90_ccw = 1670
-var t90_cw = 1670
+var t90_ccw = 1620
+var t90_cw = 1620
 var arc_time_percent = 100
 var settle_ms = 200
 var radius_factors[6] = [707, 1000, 1118, 1414, 1000, 1118]
