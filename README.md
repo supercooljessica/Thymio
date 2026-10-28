@@ -9,7 +9,8 @@ A Thymio that behaves like Shin-chan: it hunts down whoever is nearby, chases th
 | File | What it is |
 |---|---|
 | `shinchan_bot.aesl` | **The robot program.** Search, chase, taunt, avoid, and draw underpants when bored, with the pen 4.5 cm straight behind the centre hole. |
-| `shinchan_shy.aesl` | Explore open space, draw small clouds (pen 4.5 cm straight behind the centre hole), and escape front, rear, or edge hazards. |
+| `shinchan_shy.aesl` | Explore open space, draw small clouds (pen 4.5 cm straight behind the centre hole), and escape front, rear, or edge hazards. A blocked front escape retries with 90° turns. |
+| `shinchan_submit.aesl` | Submission version of the shy bot. It calls state 1 WANDER, calls the escape oscillation SHIVER, and draws the same cloud with the pen behind the robot after eight seconds. Front escapes turn 180° initially, then 90° on blocked retries; rear escapes do not turn. |
 | `shinchan_drawings.aesl` | Drawing only: a button picks a spiral, a flower or underpants. |
 | `shinchan_calibrate.aesl` | Calibration drawings for the real robot: a line, two squares, three loops. |
 | `shinchan_shapes_test.aesl` | Test drawings on the real robot: underpants, cloud and star, about 12 cm each. |
@@ -21,6 +22,7 @@ A Thymio that behaves like Shin-chan: it hunts down whoever is nearby, chases th
 | `playgrounds/arena_chase.playground` | Same arena with a second Thymio (`victim`) 45 cm ahead of Shin-chan. |
 | `playgrounds/arena_floor.png` | Floor of both arenas: how far Shin-chan can see (rings around the cylinders, sensor beams at his start) and a 10 cm grid. |
 | `docs/logic.md` | **How the programs work:** flowcharts and pseudo code. |
+| `docs/handoff.md` | Current calibration values, pen setups, tested status, and next work for a collaborator. |
 | `docs/chase_trail.svg` | Shin-chan's and the victim's trails in the chase arena, to scale, coloured by mode. |
 | `docs/drawings_preview.png` | What the drawing program draws. |
 | `docs/calibration.md` | **Why the real robot draws differently from the simulator**, and how to calibrate it from photos. |
@@ -124,11 +126,13 @@ The pen sits behind the robot, so while drawing the program steers the pen tip e
 
 ## The shy bot (`shinchan_shy.aesl`)
 
-The shy bot explores open space for eight seconds, then draws the six-semicircle cloud from `calibration/centered_pen/cloud_semicircle_test.aesl` at `unit_mm = 20`. It uses the current heading as the cloud's starting direction. When the cloud finishes, a new eight-second exploration session begins. At a moderate front reading it slows down and steers around the clearer side for up to three seconds. A rapid rise in the reading, a very close object, a failed maneuver, or a sustained dark ground reading triggers the backward wiggle, 180° turn, and forward shot. A moderate rear reading makes it move forward a little faster; a rapidly rising or very close rear reading starts a forward wiggle and shot without a turn. Drawing waits while an obstacle is near. Interrupted clouds are abandoned and started fresh after another exploration session.
+The shy bot explores open space for eight seconds, then draws the six-arc cloud (the cloud of the shape test, about 12 cm) with the pen 4.5 cm straight behind the centre hole, steering the pen tip every 50 ms like `shinchan_shapes_offset.aesl`. It uses the current heading as the cloud's starting direction. When the cloud finishes, a new eight-second exploration session begins. At a moderate front reading it slows down and steers around the clearer side for up to three seconds. A rapid rise in the reading, a very close object, a failed maneuver, or a sustained dark ground reading triggers the backward wiggle, 180° turn, and forward shot. A moderate rear reading makes it move forward a little faster; a rapidly rising or very close rear reading starts a forward wiggle and shot without a turn. Drawing waits while an obstacle is near. Interrupted clouds are abandoned and started fresh after another exploration session.
 
-The main states are explore (green, or yellow while maneuvering), draw (cyan), and avoid (red). Orange means a hazard blocked the planned escape; the robot waits stopped until the front, rear, and ground readings are clear for three sensor updates. The center button pauses (blue) or resumes. During an escape, a newly detected hazard stops the robot instead of launching another escape immediately.
+The main states are explore (green, or yellow while maneuvering), draw (cyan), and avoid (red). Orange marks a brief blocked phase. If the front path is still blocked and the rear is clear, the robot starts another backward wiggle, turns 90° toward the less occupied side, and tries the forward shot again. This can repeat without a retry limit. If the rear is also blocked, it waits for room to retreat. The center button pauses (blue) or resumes.
 
 Settings near the top include `front_threshold`, `front_hard`, `rear_threshold`, `rear_hard`, `fast_rise`, `maneuver_fast_rise`, `maneuver_timeout_ticks`, `white_min`, `edge_samples`, the pen steering `pen_speed`, `pen_side`, `pen_turn` (same as `kc`, `kb`, `kw` in the robot program; the cloud is the 6-arc cloud of the shape test), and the wiggle, turn, and shot timings. `fast_rise` is a rise in raw IR readings over roughly three sensor updates; it is an apparent closing-rate cue, not a measurement of an object's speed in millimetres per second. Two consecutive rising readings are required, and the threshold is higher while maneuvering because turning also changes the readings. The normal ground debounce is ten readings, as in the edge test; the faster escape motions use a two-reading edge stop. Try it first with the pen raised and enough room around the robot, then adjust the thresholds and timing on the actual surface.
+
+`shinchan_submit.aesl` uses the same pen-behind cloud and three escape variations, naming the wiggle SHIVER. Its front and rear checks share `obstacle_threshold = 1500`, `hard_threshold = 3000`, and `clear_threshold = 900`. Its shiver alternates motor targets of 600 and 0 and relies on the robot to limit the 600 target. `turn_180_ms` and `turn_90_ms` remain separate settings for calibration.
 
 ## The drawing program (`shinchan_drawings.aesl`)
 
@@ -150,7 +154,7 @@ Drawing starts 1 s after you let go of the button. In the simulator (no buttons)
 | `t90` | 1620 | ms for a 90° spin | Draw the flower. If the last petal lands past the first, lower `t90`; if it falls short, raise it. |
 | `cm` | 214 | ms to drive 1 cm | Draw the underpants and measure the waistband. New `cm` = `cm` × 120 ÷ measured mm. |
 
-For the newer turn, circle, edge, and shy-motion tests, see [`calibration/`](calibration/README.md). The centered-pen turn and shape test assumes the pen is on the wheel axis; the circle and motion tests are also available for an offset pen.
+For the newer turn, circle, edge, shy-motion, and offset-pen cloud tests, see [`calibration/`](calibration/README.md). The centered-pen turn and shape test assumes the pen is on the wheel axis; the offset-pen cloud has its own motion calculation.
 
 ## Calibrating the real robot (`shinchan_calibrate.aesl`)
 
@@ -229,12 +233,12 @@ The outside-pen shape program with the figures of the first calibration instead 
 
 Robot facing up (towards the top edge of the paper, square to it), pen tip on the start point, battery full. While a test is drawing, Forward, Left and Right do nothing; Centre still stops it. The light is green, blue or purple while drawing. The paper sizes include the robot's body swinging around the drawing. To start from the computer: `./thymio.sh set j=0 e=21 n=0 p=0 th=0 hq=0 la=0 ra=0 timer.period=2000,0` (T1), with `j=21 e=42` (T2) or `j=42 e=63` (T3). How the photos are used: [`docs/calibration.md`](docs/calibration.md#side-pen-shapes-line-squares-and-circles-2026-10-28-shinchan_calibrate_offsetaesl).
 
-## Working with Claude Code
+## Continuing with an AI collaborator
 
-Claude Code can run the helper for you. Ask in plain words, for example:
+Start with [`docs/handoff.md`](docs/handoff.md), then inspect the specific `.aesl` file before editing it. The calibration values in the source files are authoritative; older prose may describe an earlier experiment. The helper can be run on a connected robot or simulator. Example requests:
 
 - "Load the bot on the simulator and tell me what it's doing."
 - "The two robots are 5 cm apart now. Read the sensors and set the thresholds."
 - "Record a 3-minute chase and update the trail picture."
 
-Describe what the real robot does, or drag in photos and screenshots; Claude Code can't watch video.
+Record what the physical robot actually drew or sensed, including the paper surface, pen position, motor settings, and measured error. Keep measured results separate from model predictions.

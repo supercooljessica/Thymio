@@ -17,48 +17,44 @@
 # yellow = maneuver
 # cyan = draw
 # red = avoid
-# orange = stuck
+# orange = blocked between escape attempts
 # blue = paused
 
-var front_threshold = 1500  # start maneuvering
-var front_hard = 3000       # escape immediately
-var front_clear = 900
-var rear_threshold = 1500   # move away gently
-var rear_hard = 3000        # escape immediately
-var rear_clear = 900
-var fast_rise = 800         # raw proximity rise across about 3 sensor updates
+# constant values for parameters
+var obstacle_threshold = 1500	# maneuver around
+var hard_threshold = 3000     # immediate avoid
+var clear_threshold = 900
+var fast_rise = 800
 var maneuver_fast_rise = 1400  # stronger rise required while turning
 var white_min = 500
-var edge_samples = 10       # normal edge debounce, from the edge test
+var edge_samples = 10       # normal edge debounce
 var fast_edge_samples = 2   # faster stop during high-speed escape
-var explore_speed = 100
+var wander_speed = 100
 var rear_caution_speed = 140
 var maneuver_speed = 60
 var maneuver_steer = 90
-var maneuver_timeout_ticks = 30  # 3 seconds at 100 ms per timer0 event
-var explore_ticks_to_draw = 80  # timer0 is 100 ms, so 80 ticks = 8 seconds
-
+var maneuver_timeout_ticks = 30
+var wander_ticks_to_draw = 80
 var pen_speed = 900
 var pen_side = -20
 var pen_turn = -953
 var cloud_steps[18] = [31, -7663, 1057, 44, 372, 745, 49, 5177, 669, 62, 24840, 529, 44, -32396, 745, 49, -20892, 669]
-
-var wiggle_speed = 300
-var swerve_magnitude = 300
-var wiggle_step_time = 50
-var wiggle_steps = 25
-var turn_time = 1200       # 180 degrees at 500, -500; tune on the robot
+var shiver_speed = 300
+var shiver_interval_ms = 50
+var shiver_intervals = 25
+var turn_180_ms = 1200   # at speed 500
+var turn_90_ms = 600     # at speed 500
 var shot_time = 1000
 var shot_speed = 500
 
-var state = 1              # 1 explore, 2 draw, 3 avoid
+# measured values
+var state = 1	# 1=wander; 2=draw, 3=avoid
 var paused = 0
 var seen_prox = 0
-var explore_ticks = 0
+var wander_ticks = 0
 var wander_sign = 1
 var maneuver_active = 0
 var maneuver_ticks = 0
-var maneuver_clear_samples = 0
 var maneuver_side = 1
 var drive_speed = 0
 var steer = 0
@@ -66,25 +62,16 @@ var left_space = 0
 var right_space = 0
 var front_peak = 0
 var rear_peak = 0
-var front_min = 0
-var front_mean = 0
-var front_prev_1 = 0
-var front_prev_2 = 0
-var front_prev_3 = 0
-var rear_prev_1 = 0
-var rear_prev_2 = 0
-var rear_prev_3 = 0
-var trend_ready = 0
+var front_history[3] = [0, 0, 0]  # newest reading first
+var rear_history[3] = [0, 0, 0]
 var front_rise = 0
 var rear_rise = 0
 var front_fast_hits = 0
 var rear_fast_hits = 0
-var left_low = 0
-var right_low = 0
+var ground_low[2] = [0, 0]  # left, right consecutive low readings
 var edge_confirmed = 0
 var edge_fast = 0
 var clear_samples = 0
-
 var cloud_index = 0
 var step_count = 0
 var pause_count = 0
@@ -102,32 +89,32 @@ var side_part = 0
 var turn_part = 0
 var left_speed = 0
 var right_speed = 0
+var avoid_kind = 0         # 1 front: 180, 2 rear: 0, 3 blocked front: 90
+var avoid_phase = 0        # 1 shiver, 2 turn, 3 shot, 4 blocked
+var shiver_index = 0
 
-var avoid_kind = 0         # 1 front/edge, 2 rear
-var avoid_phase = 0        # 1 wiggle, 2 turn, 3 shot, 4 blocked
-var wiggle_index = 0
-var wiggle_left = 0
-var wiggle_right = 0
-
+# setup
 timer.period[0] = 100
 timer.period[1] = 0
 motor.left.target = 0
 motor.right.target = 0
 call leds.top(0, 32, 0)
 
-sub drive_to_empty_space
-if seen_prox == 1 and front_peak &lt; front_hard and rear_peak &lt; rear_hard and edge_confirmed == 0 then
+
+sub drive_to_empty_space # set wandering speeds, avoid obstacles that are relatively stationary
+if seen_prox == 1 and front_peak &lt; hard_threshold and rear_peak &lt; hard_threshold and edge_confirmed == 0 then
 	left_space = prox.horizontal[0] + prox.horizontal[1]
 	right_space = prox.horizontal[3] + prox.horizontal[4]
 	if maneuver_active == 1 then
+		# follow the side picked when maneuvering started
 		drive_speed = maneuver_speed
 		steer = maneuver_side * maneuver_steer
 	else
-		drive_speed = explore_speed
-		if rear_peak >= rear_threshold then
+		# wander away from whichever front side sees more reflection
+		drive_speed = wander_speed
+		if rear_peak >= obstacle_threshold then
 			drive_speed = rear_caution_speed
 		end
-		# More reflection on the right means more empty space on the left.
 		steer = (right_space - left_space) / 20 + wander_sign * 20
 		if steer > 80 then
 			steer = 80
@@ -142,37 +129,35 @@ else
 	motor.right.target = 0
 end
 
-sub resume_explore
+
+sub resume_wander # reset wander clock and sensor history
 timer.period[1] = 0
-state = 1
+state = 1 # wander
 avoid_phase = 0
-explore_ticks = 0
+wander_ticks = 0
 wander_sign = 1
 maneuver_active = 0
 maneuver_ticks = 0
-front_prev_1 = front_peak
-front_prev_2 = front_peak
-front_prev_3 = front_peak
-rear_prev_1 = rear_peak
-rear_prev_2 = rear_peak
-rear_prev_3 = rear_peak
-trend_ready = 1
+call math.fill(front_history, front_peak)
+call math.fill(rear_history, rear_peak)
 front_fast_hits = 0
 rear_fast_hits = 0
 call leds.top(0, 32, 0)
 callsub drive_to_empty_space
 
-sub start_maneuver
-if state == 2 then
+
+sub start_maneuver # slower speed to navigate around an obstacle
+if state == 2 then # draw
 	timer.period[1] = 0
-	explore_ticks = 0
+	wander_ticks = 0
 end
-state = 1
+state = 1 # wander
 maneuver_active = 1
 maneuver_ticks = 0
-maneuver_clear_samples = 0
+clear_samples = 0
 left_space = prox.horizontal[0] + prox.horizontal[1]
 right_space = prox.horizontal[3] + prox.horizontal[4]
+# pick the less occupied side, or use the wander direction if it is close
 if right_space > left_space + 200 then
 	maneuver_side = 1
 elseif left_space > right_space + 200 then
@@ -183,61 +168,52 @@ end
 call leds.top(20, 20, 0)
 callsub drive_to_empty_space
 
-sub finish_maneuver
+sub finish_maneuver # reset values, return to normal wandering
 maneuver_active = 0
 maneuver_ticks = 0
-maneuver_clear_samples = 0
+clear_samples = 0
 call leds.top(0, 32, 0)
 callsub drive_to_empty_space
 
-sub block_motion
+sub block_motion # stop when an escape path is blocked, then retry when there is room
 timer.period[1] = 0
 motor.left.target = 0
 motor.right.target = 0
+if state == 3 and avoid_phase != 4 then
+	avoid_kind = 3
+end
 state = 3
 avoid_phase = 4
 clear_samples = 0
 maneuver_active = 0
 call leds.top(32, 12, 0)
 
-sub start_wiggle_step
-if wiggle_index % 2 == 0 then
-	wiggle_left = wiggle_speed + swerve_magnitude
-	wiggle_right = wiggle_speed - swerve_magnitude
-else
-	wiggle_left = wiggle_speed - swerve_magnitude
-	wiggle_right = wiggle_speed + swerve_magnitude
-end
-if avoid_kind == 1 then
-	wiggle_left = -wiggle_left
-	wiggle_right = -wiggle_right
-end
-# Keep target speeds in the Thymio motor range.
-if wiggle_left > 500 then
-	wiggle_left = 500
-elseif wiggle_left &lt; -500 then
-	wiggle_left = -500
-end
-if wiggle_right > 500 then
-	wiggle_right = 500
-elseif wiggle_right &lt; -500 then
-	wiggle_right = -500
-end
-motor.left.target = wiggle_left
-motor.right.target = wiggle_right
-timer.period[1] = wiggle_step_time
-
-sub start_avoid
+sub start_avoid # if edge or fast obstacle detected
 timer.period[1] = 0
 state = 3
 maneuver_active = 0
 avoid_phase = 1
-wiggle_index = 0
+shiver_index = 0
 call leds.top(32, 0, 0)
-callsub start_wiggle_step
+callsub start_shiver_interval
 
-sub start_shot
-if front_peak >= front_clear or edge_fast == 1 then
+sub start_shiver_interval # alternate which wheel moves, then reverse both targets for front escapes
+if shiver_index % 2 == 0 then
+	motor.left.target = shiver_speed * 2
+	motor.right.target = 0
+else
+	motor.left.target = 0
+	motor.right.target = shiver_speed * 2
+end
+if avoid_kind != 2 then
+	motor.left.target = -motor.left.target
+	motor.right.target = -motor.right.target
+end
+timer.period[1] = shiver_interval_ms
+
+
+sub start_shot # run away quickly
+if front_peak >= clear_threshold or edge_fast == 1 then
 	callsub block_motion
 else
 	avoid_phase = 3
@@ -246,7 +222,7 @@ else
 	timer.period[1] = shot_time
 end
 
-sub start_cloud
+sub start_cloud # start drawing
 timer.period[1] = 0
 motor.left.target = 0
 motor.right.target = 0
@@ -299,10 +275,10 @@ elseif cloud_index &lt; 18 then
 	pause_count = 6
 	timer.period[1] = 50
 else
-	callsub resume_explore
+	callsub resume_wander
 end
 
-onevent button.center
+onevent button.center # pause and play
 if button.center == 1 then
 	if paused == 0 then
 		paused = 1
@@ -312,44 +288,56 @@ if button.center == 1 then
 		call leds.top(0, 0, 32)
 	else
 		paused = 0
-		if front_peak >= front_hard or rear_peak >= rear_hard or edge_confirmed == 1 or (front_peak >= front_threshold and rear_peak >= rear_threshold) then
+		# resume carefully if a hazard is still nearby
+		if front_peak >= hard_threshold or rear_peak >= hard_threshold or edge_confirmed == 1 or (front_peak >= obstacle_threshold and rear_peak >= obstacle_threshold) then
+			if state != 3 then
+				if front_peak >= clear_threshold or edge_confirmed == 1 then
+					avoid_kind = 1
+				else
+					avoid_kind = 2
+				end
+			end
 			callsub block_motion
 		else
-			callsub resume_explore
-			if front_peak >= front_threshold then
+			callsub resume_wander
+			if front_peak >= obstacle_threshold then
 				callsub start_maneuver
 			end
 		end
 	end
 end
 
+
+########
+# MAIN
+########
+
 onevent prox
-seen_prox = 1
-call math.stat(prox.horizontal[0:4], front_min, front_peak, front_mean)
+
+# get the strongest front and rear reflections
+call math.stat(prox.horizontal[0:4], left_space, front_peak, right_space)
 call math.max(rear_peak, prox.horizontal[5:5], prox.horizontal[6:6])
-# This is apparent closing rate in raw IR units, not object speed in mm/s.
-# An initially repeated value lets the first few samples form a shorter window.
-if trend_ready == 0 then
+
+# see if an obstacle is getting closer quickly
+if seen_prox == 0 then
 	front_rise = 0
 	rear_rise = 0
-	front_prev_1 = front_peak
-	front_prev_2 = front_peak
-	front_prev_3 = front_peak
-	rear_prev_1 = rear_peak
-	rear_prev_2 = rear_peak
-	rear_prev_3 = rear_peak
-	trend_ready = 1
+	call math.fill(front_history, front_peak)
+	call math.fill(rear_history, rear_peak)
+	seen_prox = 1
 else
-	front_rise = front_peak - front_prev_3
-	rear_rise = rear_peak - rear_prev_3
-	front_prev_3 = front_prev_2
-	front_prev_2 = front_prev_1
-	front_prev_1 = front_peak
-	rear_prev_3 = rear_prev_2
-	rear_prev_2 = rear_prev_1
-	rear_prev_1 = rear_peak
+	front_rise = front_peak - front_history[2]
+	rear_rise = rear_peak - rear_history[2]
+	front_history[2] = front_history[1]
+	front_history[1] = front_history[0]
+	front_history[0] = front_peak
+	rear_history[2] = rear_history[1]
+	rear_history[1] = rear_history[0]
+	rear_history[0] = rear_peak
 end
-if state == 1 and (maneuver_active == 1 or (steer > -30 and steer &lt; 30)) and front_peak >= front_threshold then
+
+# count rapid front approaches for avoid
+if state == 1 and (maneuver_active == 1 or (steer > -30 and steer &lt; 30)) and front_peak >= obstacle_threshold then # wander
 	if (maneuver_active == 0 and front_rise >= fast_rise) or (maneuver_active == 1 and front_rise >= maneuver_fast_rise) then
 		if front_fast_hits &lt; 2 then
 			front_fast_hits += 1
@@ -360,7 +348,8 @@ if state == 1 and (maneuver_active == 1 or (steer > -30 and steer &lt; 30)) and 
 else
 	front_fast_hits = 0
 end
-if state == 1 and maneuver_active == 0 and steer > -30 and steer &lt; 30 and rear_peak >= rear_threshold and rear_rise >= fast_rise then
+# count rapid rear approaches only while wandering mostly straight
+if state == 1 and maneuver_active == 0 and steer > -30 and steer &lt; 30 and rear_peak >= obstacle_threshold and rear_rise >= fast_rise then
 	if rear_fast_hits &lt; 2 then
 		rear_fast_hits += 1
 	end
@@ -368,79 +357,97 @@ else
 	rear_fast_hits = 0
 end
 
+# edge detection with sampling
 if prox.ground.delta[0] &lt;= white_min then
-	if left_low &lt; edge_samples then
-		left_low += 1
+	if ground_low[0] &lt; edge_samples then
+		ground_low[0] += 1
 	end
 else
-	left_low = 0
+	ground_low[0] = 0
 end
 if prox.ground.delta[1] &lt;= white_min then
-	if right_low &lt; edge_samples then
-		right_low += 1
+	if ground_low[1] &lt; edge_samples then
+		ground_low[1] += 1
 	end
 else
-	right_low = 0
+	ground_low[1] = 0
 end
 edge_confirmed = 0
 edge_fast = 0
-if left_low >= edge_samples or right_low >= edge_samples then
+if ground_low[0] >= edge_samples or ground_low[1] >= edge_samples then
 	edge_confirmed = 1
 end
-if left_low >= fast_edge_samples or right_low >= fast_edge_samples then
+if ground_low[0] >= fast_edge_samples or ground_low[1] >= fast_edge_samples then
 	edge_fast = 1
 end
 
 if paused == 0 then
 	if state == 3 then
+		# keep the current escape safe before considering a new action
 		if avoid_phase == 4 then
-			# Remain stopped until all directions are clear for three readings.
-			if front_peak &lt; front_clear and rear_peak &lt; rear_clear and edge_fast == 0 then
+			# retry a blocked front escape when there is room behind
+			if front_peak >= clear_threshold or edge_fast == 1 then
+				clear_samples = 0
+				if rear_peak &lt; obstacle_threshold then
+					if avoid_kind != 1 then
+						avoid_kind = 3
+					end
+					callsub start_avoid
+				end
+			elseif rear_peak >= obstacle_threshold then
+				clear_samples = 0
+				avoid_kind = 2
+				callsub start_avoid
+			else
 				clear_samples += 1
 				if clear_samples >= 3 then
-					callsub resume_explore
+					callsub resume_wander
 				end
-			else
-				clear_samples = 0
 			end
 		elseif avoid_phase == 1 then
-			if (avoid_kind == 1 and rear_peak >= rear_threshold) or (avoid_kind == 2 and (front_peak >= front_threshold or edge_fast == 1)) then
+			# stop shivering if the travel direction becomes blocked
+			if (avoid_kind != 2 and rear_peak >= obstacle_threshold) or (avoid_kind == 2 and (front_peak >= obstacle_threshold or edge_fast == 1)) then
 				callsub block_motion
 			end
 		elseif avoid_phase == 2 then
+				# stop turning if a ground edge appears
 			if edge_fast == 1 then
 				callsub block_motion
 			end
 		elseif avoid_phase == 3 then
-			if front_peak >= front_threshold or edge_fast == 1 then
+			# stop the forward shot if another front obstacle or edge appears
+			if front_peak >= obstacle_threshold or edge_fast == 1 then
 				callsub block_motion
 			end
 		end
-	elseif edge_confirmed == 1 or front_peak >= front_hard or front_fast_hits >= 2 then
-		if rear_peak >= rear_threshold then
+	elseif edge_confirmed == 1 or front_peak >= hard_threshold or front_fast_hits >= 2 then
+		# a new front or edge hazard gets the 180 turn escape
+		avoid_kind = 1
+		if rear_peak >= obstacle_threshold then
 			callsub block_motion
 		else
-			avoid_kind = 1
 			callsub start_avoid
 		end
-	elseif rear_peak >= rear_hard or rear_fast_hits >= 2 then
-		if front_peak >= front_clear or edge_fast == 1 then
+	elseif rear_peak >= hard_threshold or rear_fast_hits >= 2 then
+		# a rear hazard gets a forward shiver and no turn
+		avoid_kind = 2
+		if front_peak >= clear_threshold or edge_fast == 1 then
 			callsub block_motion
 		else
-			avoid_kind = 2
 			callsub start_avoid
 		end
-	elseif front_peak >= front_threshold or maneuver_active == 1 then
+	elseif front_peak >= obstacle_threshold or maneuver_active == 1 then
+		# try steering around a slower front obstacle before escaping
 		if maneuver_active == 0 then
 			callsub start_maneuver
 		else
-			if front_peak &lt; front_clear then
-				maneuver_clear_samples += 1
-				if maneuver_clear_samples >= 3 then
+			if front_peak &lt; clear_threshold then
+				clear_samples += 1
+				if clear_samples >= 3 then
 					callsub finish_maneuver
 				end
 			else
-				maneuver_clear_samples = 0
+				clear_samples = 0
 			end
 			if maneuver_active == 1 then
 				callsub drive_to_empty_space
@@ -451,58 +458,79 @@ if paused == 0 then
 	end
 end
 
-onevent timer0
+onevent timer0 # keep time for wandering and maneuvering
 if paused == 0 and state == 1 and seen_prox == 1 then
-	explore_ticks += 1
-	if explore_ticks % 20 == 0 then
+	wander_ticks += 1
+	# flip the small steering bias every two seconds
+	if wander_ticks % 20 == 0 then
 		wander_sign = -wander_sign
 	end
 	if maneuver_active == 1 then
+		# give up maneuvering after three seconds if the front is still blocked
 		maneuver_ticks += 1
 		if maneuver_ticks >= maneuver_timeout_ticks then
-			if front_peak &lt; front_threshold then
+			if front_peak &lt; obstacle_threshold then
 				callsub finish_maneuver
-			elseif rear_peak >= rear_threshold then
+			elseif rear_peak >= obstacle_threshold then
+				avoid_kind = 1
 				callsub block_motion
 			else
 				avoid_kind = 1
 				callsub start_avoid
 			end
 		end
-	elseif explore_ticks >= explore_ticks_to_draw and front_peak &lt; front_threshold and rear_peak &lt; rear_threshold and edge_fast == 0 then
+	elseif wander_ticks >= wander_ticks_to_draw and front_peak &lt; obstacle_threshold and rear_peak &lt; obstacle_threshold and edge_fast == 0 then
+		# start drawing after eight seconds with a clear path
 		callsub start_cloud
 	end
 end
 
-onevent timer1
+onevent timer1 # move to the next timed motion
 timer.period[1] = 0
 if paused == 0 then
 	if state == 2 then
 		callsub cloud_step
 	elseif state == 3 then
 		if avoid_phase == 1 then
-			wiggle_index += 1
-			if wiggle_index &lt; wiggle_steps then
-				callsub start_wiggle_step
-			elseif avoid_kind == 1 then
-				if rear_peak >= rear_threshold or edge_confirmed == 1 then
+			# repeat the shiver intervals, then choose the turn for this escape
+			shiver_index += 1
+			if shiver_index &lt; shiver_intervals then
+				callsub start_shiver_interval
+			elseif avoid_kind != 2 then
+				if rear_peak >= obstacle_threshold or edge_confirmed == 1 then
 					callsub block_motion
 				else
 					avoid_phase = 2
-					motor.left.target = 500
-					motor.right.target = -500
-					timer.period[1] = turn_time
+					if avoid_kind == 1 then
+						motor.left.target = 500
+						motor.right.target = -500
+						timer.period[1] = turn_180_ms
+					else
+						# for blocked retries, turn 90 toward the less occupied side
+						left_space = prox.horizontal[0] + prox.horizontal[1]
+						right_space = prox.horizontal[3] + prox.horizontal[4]
+						if right_space >= left_space then
+							maneuver_side = 1
+						else
+							maneuver_side = -1
+						end
+						motor.left.target = -maneuver_side * 500
+						motor.right.target = maneuver_side * 500
+						timer.period[1] = turn_90_ms
+					end
 				end
 			else
 				callsub start_shot
 			end
 		elseif avoid_phase == 2 then
+			# turn finished, so try the forward shot
 			callsub start_shot
 		elseif avoid_phase == 3 then
-			if front_peak >= front_clear or rear_peak >= rear_clear or edge_fast == 1 then
+			# shot finished, so return to wandering if the path is clear
+			if front_peak >= clear_threshold or rear_peak >= clear_threshold or edge_fast == 1 then
 				callsub block_motion
 			else
-				callsub resume_explore
+				callsub resume_wander
 			end
 		end
 	end

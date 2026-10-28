@@ -14,7 +14,7 @@
 
 <!--node thymio-II-->
 <node nodeId="31202" name="thymio-II">
-var wiggle_step = -1  # 0 through 4 are the five wiggle steps
+var wiggle_step = -1  # 0 through 24 are the 25 wiggle intervals
 var wiggle_speed = 300
 var swerve_magnitude = 300
 var wiggle_step_time = 50
