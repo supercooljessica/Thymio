@@ -174,7 +174,7 @@ CENTER: pause or resume. A paused escape stops the motors.
 
 The apparent closing-rate cue compares raw proximity values across about three sensor updates. It does not estimate object speed in physical units. Two consecutive rapid rises are required. A slow front approach gets a steering attempt first; a failed attempt or hard threshold starts escape. The ground edge needs ten consecutive low readings in normal movement and two during an escape. The drawing code uses centered-pen radii and in-place turns, so it does not yet draw the intended cloud with a rigid offset pen.
 
-`shinchan_submit.aesl` uses the same three escape variations. WANDER replaces EXPLORE, SHIVER replaces wiggle, and DRAW is a stationary one-second placeholder. Both programs use `turn_180_ms = 1200` and `turn_90_ms = 600` as starting estimates for turns at motor targets of magnitude 500.
+`shinchan_submit.aesl` uses the same centered-pen cloud and three escape variations. WANDER replaces EXPLORE, and SHIVER replaces wiggle. Timer 1 steps through the six cloud arcs, settles, and clockwise turns while proximity events can interrupt drawing. Both programs use `turn_180_ms = 1200` and `turn_90_ms = 600` as starting estimates for turns at motor targets of magnitude 500.
 
 ## Offset-pen cloud test
 

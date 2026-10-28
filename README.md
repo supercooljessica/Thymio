@@ -10,7 +10,7 @@ A Thymio that behaves like Shin-chan: it hunts down whoever is nearby, chases th
 |---|---|
 | `shinchan_bot.aesl` | **The robot program.** Search, chase, taunt, avoid, and draw underpants when bored. |
 | `shinchan_shy.aesl` | Explore open space, draw small clouds, and escape front, rear, or edge hazards. A blocked front escape retries with 90° turns. |
-| `shinchan_submit.aesl` | Submission version of the shy bot. It calls state 1 WANDER, calls the escape oscillation SHIVER, and currently pauses instead of drawing a cloud. Front escapes turn 180° initially, then 90° on blocked retries; rear escapes do not turn. |
+| `shinchan_submit.aesl` | Submission version of the shy bot. It calls state 1 WANDER, calls the escape oscillation SHIVER, and draws the centered-pen cloud after eight seconds. Front escapes turn 180° initially, then 90° on blocked retries; rear escapes do not turn. |
 | `shinchan_drawings.aesl` | Drawing only: a button picks a spiral, a flower or underpants. |
 | `sim_victim.aesl` | A simple wandering robot for Shin-chan to chase in the simulator. |
 | `playgrounds/arena.playground` | Simulator arena: empty 2 × 2 m square, four robot-sized cylinders, Shin-chan in the middle. |
@@ -119,7 +119,7 @@ The main states are explore (green, or yellow while maneuvering), draw (cyan), a
 
 Settings near the top include `front_threshold`, `front_hard`, `rear_threshold`, `rear_hard`, `fast_rise`, `maneuver_fast_rise`, `maneuver_timeout_ticks`, `white_min`, `edge_samples`, `unit_mm`, `t90_ccw`, `t90_cw`, and the wiggle, turn, and shot timings. `fast_rise` is a rise in raw IR readings over roughly three sensor updates; it is an apparent closing-rate cue, not a measurement of an object's speed in millimetres per second. Two consecutive rising readings are required, and the threshold is higher while maneuvering because turning also changes the readings. The normal ground debounce is ten readings, as in the edge test; the faster escape motions use a two-reading edge stop. Try it first with the pen raised and enough room around the robot, then adjust the thresholds and timing on the actual surface.
 
-`shinchan_submit.aesl` uses the same three escape variations, naming the wiggle SHIVER. `turn_180_ms` and `turn_90_ms` are separate settings for the 500-speed turns in both programs.
+`shinchan_submit.aesl` uses the same centered-pen cloud and three escape variations, naming the wiggle SHIVER. Its front and rear checks share `obstacle_threshold = 1500`, `hard_threshold = 3000`, and `clear_threshold = 900`. Its shiver alternates motor targets of 600 and 0 and relies on the robot to limit the 600 target. `turn_180_ms` and `turn_90_ms` remain separate settings for calibration.
 
 ## The drawing program (`shinchan_drawings.aesl`)
 
