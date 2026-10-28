@@ -30,20 +30,16 @@ var white_min = 500
 var edge_samples = 10       # normal edge debounce
 var fast_edge_samples = 2   # faster stop during high-speed escape
 var wander_speed = 100
+var wander_curve = 60       # steering that makes wandering curvy
 var rear_caution_speed = 140
 var maneuver_speed = 60
 var maneuver_steer = 90
 var maneuver_timeout_ticks = 30
-var wander_ticks_to_draw = 80
-var unit_mm = 20
-var half_wheelbase_mm = 50
-var cloud_outer_speed = 150
-var t90_ccw = 1670
-var t90_cw = 1670
-var arc_time_percent = 100
-var settle_ms = 200
-var radius_factors[6] = [707, 1000, 1118, 1414, 1000, 1118]
-var turn_tenths[5] = [1350, 1534, 716, 1350, 1166]
+var wander_ticks_to_draw = 120
+var pen_speed = 900
+var pen_side = -20
+var pen_turn = -953
+var drawing_steps[51] = [31, -7663, 1057, 44, 372, 745, 49, 5177, 669, 62, 24840, 529, 44, -32396, 745, 49, -20892, 669, 83, -16384, 0, 28, -32768, 0, 52, 16542, 315, 17, 16384, 0, 52, 158, 315, 28, 0, 0, 83, -16384, 0, 83, 22938, 0, 83, -3277, 0, 83, -29491, 0, 83, 9830, 0]  # cloud, underpants, star
 var shiver_speed = 300
 var shiver_interval_ms = 50
 var shiver_intervals = 25
@@ -63,6 +59,7 @@ var maneuver_ticks = 0
 var maneuver_side = 1
 var drive_speed = 0
 var steer = 0
+var space_steer = 0         # steering away from nearby things, without the curve
 var left_space = 0
 var right_space = 0
 var front_peak = 0
@@ -77,18 +74,25 @@ var ground_low[2] = [0, 0]  # left, right consecutive low readings
 var edge_confirmed = 0
 var edge_fast = 0
 var clear_samples = 0
-var draw_phase = 0         # 1 settle, 2 arc, 3 settle, 4 turn, 5 settle
-var arc_index = 0
-var radius_factor = 0
-var turn_tenths_now = 0
-var radius_mm = 0
-var radius_minus_wheelbase = 0
-var radius_plus_wheelbase = 0
-var cloud_inner_speed = 0
-var speed_gap = 0
-var raw_arc_ms = 0
-var arc_ms = 0
-var turn_ms = 0
+var drawing_index = 0
+var drawing_end = 0
+var next_drawing = 0
+var step_count = 0
+var pause_count = 0
+var pen_dir = 0
+var pen_dir_step = 0
+var heading = 0
+var heading_rest = 0
+var left_rest = 0
+var right_rest = 0
+var angle = 0
+var sin_angle = 0
+var cos_angle = 0
+var forward_part = 0
+var side_part = 0
+var turn_part = 0
+var left_speed = 0
+var right_speed = 0
 var avoid_kind = 0         # 1 front: 180, 2 rear: 0, 3 blocked front: 90
 var avoid_phase = 0        # 1 shiver, 2 turn, 3 shot, 4 blocked
 var shiver_index = 0
@@ -115,11 +119,12 @@ if seen_prox == 1 and front_peak &lt; hard_threshold and rear_peak &lt; hard_thr
 		if rear_peak >= obstacle_threshold then
 			drive_speed = rear_caution_speed
 		end
-		steer = (right_space - left_space) / 20 + wander_sign * 20
-		if steer > 80 then
-			steer = 80
-		elseif steer &lt; -80 then
-			steer = -80
+		space_steer = (right_space - left_space) / 20
+		steer = space_steer + wander_sign * wander_curve
+		if steer > 120 then
+			steer = 120
+		elseif steer &lt; -120 then
+			steer = -120
 		end
 	end
 	motor.left.target = drive_speed - steer
@@ -133,7 +138,6 @@ end
 sub resume_wander # reset wander clock and sensor history
 timer.period[1] = 0
 state = 1 # wander
-draw_phase = 0
 avoid_phase = 0
 wander_ticks = 0
 wander_sign = 1
@@ -150,7 +154,6 @@ callsub drive_to_empty_space
 sub start_maneuver # slower speed to navigate around an obstacle
 if state == 2 then # draw
 	timer.period[1] = 0
-	draw_phase = 0
 	wander_ticks = 0
 end
 state = 1 # wander
@@ -185,7 +188,6 @@ if state == 3 and avoid_phase != 4 then
 	avoid_kind = 3
 end
 state = 3
-draw_phase = 0
 avoid_phase = 4
 clear_samples = 0
 maneuver_active = 0
@@ -194,7 +196,6 @@ call leds.top(32, 12, 0)
 sub start_avoid # if edge or fast obstacle detected
 timer.period[1] = 0
 state = 3
-draw_phase = 0
 maneuver_active = 0
 avoid_phase = 1
 shiver_index = 0
@@ -226,30 +227,66 @@ else
 	timer.period[1] = shot_time
 end
 
-sub start_cloud # start drawing
+sub start_drawing # start drawing
 timer.period[1] = 0
 motor.left.target = 0
 motor.right.target = 0
 state = 2
-arc_index = 0
-draw_phase = 1
+drawing_index = next_drawing
+drawing_end = next_drawing + 18
+if drawing_end > 51 then
+	drawing_end = 51
+end
+next_drawing = drawing_end % 51
+step_count = 0
+pause_count = 6
+heading = 0
+heading_rest = 0
+left_rest = 0
+right_rest = 0
 maneuver_active = 0
 call leds.top(0, 20, 20)
-timer.period[1] = settle_ms
+timer.period[1] = 50
 
-sub start_cloud_arc # set the wheel speeds and time for the next semicircle
-radius_factor = radius_factors[arc_index]
-call math.muldiv(radius_mm, unit_mm, radius_factor, 1000)
-radius_minus_wheelbase = radius_mm - half_wheelbase_mm
-radius_plus_wheelbase = radius_mm + half_wheelbase_mm
-call math.muldiv(cloud_inner_speed, cloud_outer_speed, radius_minus_wheelbase, radius_plus_wheelbase)
-speed_gap = cloud_outer_speed - cloud_inner_speed
-call math.muldiv(raw_arc_ms, t90_ccw, 600, speed_gap)
-call math.muldiv(arc_ms, raw_arc_ms, arc_time_percent, 100)
-draw_phase = 2
-motor.left.target = cloud_inner_speed
-motor.right.target = cloud_outer_speed
-timer.period[1] = arc_ms
+sub drawing_step
+if step_count > 0 then
+	angle = pen_dir - heading
+	call math.sin(sin_angle, angle)
+	call math.cos(cos_angle, angle)
+	call math.muldiv(forward_part, cos_angle, pen_speed, 32767)
+	call math.muldiv(side_part, sin_angle, pen_side, 32767)
+	forward_part += side_part
+	call math.muldiv(turn_part, sin_angle, pen_turn, 32767)
+	left_rest += forward_part - turn_part
+	right_rest += forward_part + turn_part
+	left_speed = left_rest / 10
+	right_speed = right_rest / 10
+	left_rest -= left_speed * 10
+	right_rest -= right_speed * 10
+	motor.left.target = left_speed
+	motor.right.target = right_speed
+	heading_rest += (right_speed - left_speed) * 86
+	turn_part = heading_rest / 49
+	heading += turn_part
+	heading_rest -= turn_part * 49
+	pen_dir += pen_dir_step
+	step_count -= 1
+	timer.period[1] = 50
+elseif pause_count > 0 then
+	motor.left.target = 0
+	motor.right.target = 0
+	pause_count -= 1
+	timer.period[1] = 50
+elseif drawing_index &lt; drawing_end then
+	step_count = drawing_steps[drawing_index]
+	pen_dir = drawing_steps[drawing_index + 1]
+	pen_dir_step = drawing_steps[drawing_index + 2]
+	drawing_index += 3
+	pause_count = 6
+	timer.period[1] = 50
+else
+	callsub resume_wander
+end
 
 onevent button.center # pause and play
 if button.center == 1 then
@@ -310,7 +347,7 @@ else
 end
 
 # count rapid front approaches for avoid
-if state == 1 and (maneuver_active == 1 or (steer > -30 and steer &lt; 30)) and front_peak >= obstacle_threshold then # wander
+if state == 1 and (maneuver_active == 1 or (space_steer > -30 and space_steer &lt; 30)) and front_peak >= obstacle_threshold then # wander
 	if (maneuver_active == 0 and front_rise >= fast_rise) or (maneuver_active == 1 and front_rise >= maneuver_fast_rise) then
 		if front_fast_hits &lt; 2 then
 			front_fast_hits += 1
@@ -321,8 +358,8 @@ if state == 1 and (maneuver_active == 1 or (steer > -30 and steer &lt; 30)) and 
 else
 	front_fast_hits = 0
 end
-# count rapid rear approaches only while wandering mostly straight
-if state == 1 and maneuver_active == 0 and steer > -30 and steer &lt; 30 and rear_peak >= obstacle_threshold and rear_rise >= fast_rise then
+# count rapid rear approaches only while not steering hard away from something
+if state == 1 and maneuver_active == 0 and space_steer > -30 and space_steer &lt; 30 and rear_peak >= obstacle_threshold and rear_rise >= fast_rise then
 	if rear_fast_hits &lt; 2 then
 		rear_fast_hits += 1
 	end
@@ -434,8 +471,8 @@ end
 onevent timer0 # keep time for wandering and maneuvering
 if paused == 0 and state == 1 and seen_prox == 1 then
 	wander_ticks += 1
-	# flip the small steering bias every two seconds
-	if wander_ticks % 20 == 0 then
+	# flip the curve every three seconds
+	if wander_ticks % 30 == 0 then
 		wander_sign = -wander_sign
 	end
 	if maneuver_active == 1 then
@@ -453,8 +490,8 @@ if paused == 0 and state == 1 and seen_prox == 1 then
 			end
 		end
 	elseif wander_ticks >= wander_ticks_to_draw and front_peak &lt; obstacle_threshold and rear_peak &lt; obstacle_threshold and edge_fast == 0 then
-		# start drawing after eight seconds with a clear path
-		callsub start_cloud
+		# start drawing after twelve seconds with a clear path
+		callsub start_drawing
 	end
 end
 
@@ -462,34 +499,7 @@ onevent timer1 # move to the next timed motion
 timer.period[1] = 0
 if paused == 0 then
 	if state == 2 then
-		# advance through the six arcs and the turns between them
-		if draw_phase == 1 then
-			callsub start_cloud_arc
-		elseif draw_phase == 2 then
-			motor.left.target = 0
-			motor.right.target = 0
-			if arc_index &lt; 5 then
-				draw_phase = 3
-				timer.period[1] = settle_ms
-			else
-				callsub resume_wander
-			end
-		elseif draw_phase == 3 then
-			turn_tenths_now = turn_tenths[arc_index]
-			call math.muldiv(turn_ms, t90_cw, turn_tenths_now, 900)
-			draw_phase = 4
-			motor.left.target = 150
-			motor.right.target = -150
-			timer.period[1] = turn_ms
-		elseif draw_phase == 4 then
-			motor.left.target = 0
-			motor.right.target = 0
-			draw_phase = 5
-			timer.period[1] = settle_ms
-		elseif draw_phase == 5 then
-			arc_index += 1
-			callsub start_cloud_arc
-		end
+		callsub drawing_step
 	elseif state == 3 then
 		if avoid_phase == 1 then
 			# repeat the shiver intervals, then choose the turn for this escape

@@ -7,9 +7,10 @@ var close = 2500
 var hard = 4000
 var clear = 1500
 var bored = 172
-var t90 = 1244
-var cm = 167
-var pan[6] = [120, 40, 0, 25, 0, 40]
+var kc = 900
+var kb = -20
+var kw = -953
+var tab[18] = [83, -16384, 0, 28, -32768, 0, 52, 16542, 315, 17, 16384, 0, 52, 158, 315, 28, 0, 0]
 var state = 1
 var last = 0
 var age
@@ -25,6 +26,21 @@ var turn
 var wavy
 var s
 var d
+var c
+var v
+var w
+var dd
+var ml
+var mr
+var j
+var n
+var p
+var ph
+var dp
+var th
+var hq
+var la
+var ra
 var r
 var g
 var b
@@ -63,8 +79,14 @@ if state == 1 then
 		state = 6
 	elseif age >= bored then
 		state = 3
-		s = 0
-		timer.period[0] = 100
+		j = 0
+		n = 0
+		p = 6
+		th = 0
+		hq = 0
+		la = 0
+		ra = 0
+		timer.period[0] = 50
 	end
 elseif state == 3 then
 	if fp >= detect then
@@ -121,20 +143,40 @@ if state != 3 then
 end
 
 onevent timer0
-if state == 3 and s < 12 then
-	motor.left.target = 150
-	motor.right.target = -150
-	d = t90
-	if s % 2 == 0 then
-		motor.right.target = 150
-		d = pan[s / 2] * cm / 10
-		if d == 0 then
-			motor.left.target = 0
-			d = t90 * 2
-		end
+if state == 3 and (n > 0 or p > 0 or j < 18) then
+	if n > 0 then
+		d = ph - th
+		call math.sin(s, d)
+		call math.cos(c, d)
+		call math.muldiv(v, c, kc, 32767)
+		call math.muldiv(w, s, kb, 32767)
+		v += w
+		call math.muldiv(dd, s, kw, 32767)
+		la += v - dd
+		ra += v + dd
+		ml = la / 10
+		mr = ra / 10
+		la -= ml * 10
+		ra -= mr * 10
+		motor.left.target = ml
+		motor.right.target = mr
+		hq += (mr - ml) * 86
+		w = hq / 49
+		th += w
+		hq -= w * 49
+		ph += dp
+		n -= 1
+	elseif p > 0 then
+		motor.left.target = 0
+		motor.right.target = 0
+		p -= 1
+	else
+		n = tab[j]
+		ph = tab[j + 1]
+		dp = tab[j + 2]
+		j += 3
+		p = 6
 	end
-	timer.period[0] = d
-	s += 1
 else
 	timer.period[0] = 0
 	if state == 3 then

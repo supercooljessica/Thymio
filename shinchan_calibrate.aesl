@@ -1,0 +1,68 @@
+<!DOCTYPE aesl-source>
+<network>
+<keywords flag="true"/>
+<node nodeId="1" name="thymio-II"><![CDATA[var cm = 214
+var t90r = 1620
+var t90l = 1620
+var seq[81] = [150, 150, 30, 0, 0, 120, 150, 150, 60, 0, 0, 120, 150, 150, 120, 0, 0, 120, 300, 300, 60, 150, 150, 120, 150, -150, -10, 150, 150, 120, 150, -150, -10, 150, 150, 120, 150, -150, -10, 150, 150, 240, -150, 150, -10, 150, 150, 120, -150, 150, -10, 150, 150, 120, -150, 150, -10, 150, 150, 120, 150, 150, 50, -50, 150, -60, 150, 150, 80, 0, 150, -80, 150, 150, 150, 50, 150, -120, 150, 150, 100]
+var i = 0
+var e = 0
+var d
+var t
+var m
+
+motor.left.target = 0
+motor.right.target = 0
+timer.period[0] = 0
+
+sub go
+motor.left.target = 0
+motor.right.target = 0
+timer.period[0] = 2000
+
+onevent button.forward
+i = 0
+e = 21
+call leds.top(0, 32, 0)
+callsub go
+
+onevent button.left
+i = 21
+e = 60
+call leds.top(0, 0, 32)
+callsub go
+
+onevent button.right
+i = 60
+e = 81
+call leds.top(32, 0, 32)
+callsub go
+
+onevent button.center
+e = 0
+callsub go
+
+onevent timer0
+if i < e then
+	motor.left.target = seq[i]
+	motor.right.target = seq[i + 1]
+	d = seq[i + 2]
+	t = cm
+	if d < 0 then
+		d = -d
+		t = t90l
+		if seq[i] > seq[i + 1] then
+			t = t90r
+		end
+	end
+	call math.muldiv(m, d, t, 10)
+	timer.period[0] = m
+	i += 3
+else
+	motor.left.target = 0
+	motor.right.target = 0
+	timer.period[0] = 0
+	call leds.top(0, 0, 0)
+end
+]]></node>
+</network>

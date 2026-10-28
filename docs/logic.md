@@ -10,7 +10,7 @@ Main Aseba programs and calibration sketches:
 | `calibration/offset_pen/cloud_offset_test.aesl` | Standalone cloud drawing that accounts for a pen forward and right of the wheel axle. |
 | `sim_victim.aesl` | A wandering robot for Shin-chan to chase in the simulator. |
 
-`shinchan_bot.aesl`, `shinchan_drawings.aesl`, and the cloud inside `shinchan_shy.aesl` assume a centered pen. The standalone offset-pen cloud uses a separate pen-tip motion calculation. See [the handoff](handoff.md) for current parameters and integration status.
+`shinchan_bot.aesl`, `shinchan_shy.aesl` and `shinchan_submit.aesl` draw with the pen 45 mm straight behind the centre hole: while drawing they steer the pen tip every 50 ms (see the bot's DRAWING TIMER below). `shinchan_drawings.aesl` still assumes a centered pen. The standalone offset-pen cloud test uses an older pen-tip calculation for a pen in front of the axle. See [the handoff](handoff.md) for current parameters and integration status.
 
 ---
 
@@ -72,7 +72,8 @@ settings (change live with "thymio set"):
     hard   = 4000    reading that means touching            (about 2 cm)
     clear  = 1500    AVOID ends once everything is below this
     bored  = 172     ticks of SEARCH (17.2 s) before drawing
-    t90, cm          drawing timings: ms per 90 degree turn, ms per cm
+    kc, kb, kw       pen steering: 10 x pen speed 90, and the pen position
+                     (4.5 cm straight behind the centre hole); see README
 
 start: state = SEARCH
 
@@ -136,21 +137,26 @@ EVERY SENSOR TICK (10 times a second):
 
     if not BORED: set the wheels to drive + turn (left) and drive - turn (right)
 
-DRAWING TIMER (only while BORED), one step each time it fires:
-    underpants = 12 steps: a move, then a 90 degree right spin, six times
-        moves: straight 120 mm, straight 40 mm, quarter arc, straight 25 mm,
-               quarter arc, straight 40 mm
-        straight: both wheels 150 for mm * cm / 10 ms
-        arc:      left wheel stopped, right 150, for 2 * t90 ms
-        spin:     left 150, right -150, for t90 ms
-    after step 12, or if no longer BORED: stop the timer; if still BORED, state = SEARCH
+DRAWING TIMER (only while BORED), every 50 ms; the pen is behind the robot,
+so the program steers the pen tip, not the robot:
+    underpants = 6 parts from tab: straight 120 mm, straight 40 mm, quarter arc,
+                 straight 25 mm, quarter arc, straight 40 mm; a 0.3 s stop after each
+    each part: n steps, the direction the pen should move, and how much that
+               direction changes per step (0 for straight parts)
+    each step:
+        d = pen direction - robot heading (the heading is counted from the wheel
+            speeds the program sets, starting at 0 when the drawing starts)
+        forward = kc * cos d + kb * sin d,  turn = kw * sin d
+        left = forward - turn, right = forward + turn   (in tenths, remainders kept)
+        heading += (right - left) * 86 / 49
+    after the last part, or if no longer BORED: stop the timer; if still BORED, state = SEARCH
 ```
 
 ---
 
 ## shinchan_shy.aesl
 
-The shy program is separate from the hunter bot. `state` is 1 EXPLORE, 2 DRAW, or 3 AVOID; a maneuver remains in EXPLORE. `timer.period[0] = 100` provides the exploration clock, while timer 1 sequences cloud arcs, turns, wiggles, and escape phases without blocking sensor events.
+The shy program is separate from the hunter bot. `state` is 1 EXPLORE, 2 DRAW, or 3 AVOID; a maneuver remains in EXPLORE. `timer.period[0] = 100` provides the exploration clock, while timer 1 steps the cloud drawing every 50 ms and sequences wiggles and escape phases without blocking sensor events.
 
 ```text
 START -> EXPLORE
@@ -167,14 +173,14 @@ ANY ACTIVE STATE:
     toward the less occupied side -> forward shot; repeat if blocked again
   front and rear both occupied -> wait for rear clearance before retreating
 
-DRAW: six counterclockwise semicircles with clockwise turns between them;
-      a hazard interrupts the cloud, and the next draw starts from arc 1.
+DRAW: six arcs from cloud_steps, the pen tip steered every 50 ms (pen behind the robot),
+      0.3 s stop between arcs; a hazard interrupts the cloud, and the next draw starts from arc 1.
 CENTER: pause or resume. A paused escape stops the motors.
 ```
 
 The apparent closing-rate cue compares raw proximity values across about three sensor updates. It does not estimate object speed in physical units. Two consecutive rapid rises are required. A slow front approach gets a steering attempt first; a failed attempt or hard threshold starts escape. The ground edge needs ten consecutive low readings in normal movement and two during an escape. The drawing code uses centered-pen radii and in-place turns, so it does not yet draw the intended cloud with a rigid offset pen.
 
-`shinchan_submit.aesl` uses the same centered-pen cloud and three escape variations. WANDER replaces EXPLORE, and SHIVER replaces wiggle. Timer 1 steps through the six cloud arcs, settles, and clockwise turns while proximity events can interrupt drawing. Both programs use `turn_180_ms = 1200` and `turn_90_ms = 600` as starting estimates for turns at motor targets of magnitude 500.
+`shinchan_submit.aesl` draws the same pen-behind cloud, then underpants, then a star, in turn (all in `drawing_steps`; `next_drawing` steps through 0, 18 and 36), and uses three escape variations. WANDER replaces EXPLORE, and SHIVER replaces wiggle. Timer 1 steps the cloud drawing every 50 ms while proximity events can interrupt it. Both programs use `turn_180_ms = 1200` and `turn_90_ms = 600` as starting estimates for turns at motor targets of magnitude 500.
 
 ## Offset-pen cloud test
 
@@ -212,7 +218,10 @@ STEP TIMER:
                            spin left 90 degrees (t90)
                            quarter arc
                            spin left 162 degrees (t90 * 9 / 5)
-        underpants (12):   same steps as in shinchan_bot
+        underpants (12):   a move, then a 90 degree right spin, six times:
+                           straight 120, 40 mm, quarter arc, straight 25 mm,
+                           quarter arc, straight 40 mm (straight: both wheels 150
+                           for mm * cm / 10 ms; spin: 150 / -150 for t90 ms)
         s = s + 1, run the timer again after that step's time
     else:
         wheels off, timer off

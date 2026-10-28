@@ -1,8 +1,8 @@
 <!DOCTYPE aesl-source>
 <network>
 <keywords flag="true"/>
-<node nodeId="1" name="thymio-II"><![CDATA[var t90 = 1244
-var cm = 167
+<node nodeId="1" name="thymio-II"><![CDATA[var t90 = 1620
+var cm = 214
 var pan[6] = [120, 40, 0, 25, 0, 40]
 var n
 var s
