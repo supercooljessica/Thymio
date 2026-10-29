@@ -1,6 +1,6 @@
 # Thymio collaboration handoff
 
-Updated 2026-10-27. Read the source file before changing a behavior: the values below describe the current checkout and the observations reported so far. A saved parameter is not proof that the physical robot draws that path accurately.
+Updated 2026-10-28. Read the source file before changing a behavior: the values below describe the current checkout and the observations reported so far. A saved parameter is not proof that the physical robot draws that path accurately.
 
 ## Which program to continue
 
@@ -9,6 +9,7 @@ Updated 2026-10-27. Read the source file before changing a behavior: the values 
 | Hunter Shin-chan | [`../shinchan_bot.aesl`](../shinchan_bot.aesl) | Search, pursue, taunt, avoid, and draw underpants when bored. Its drawing assumes a centered pen. |
 | Shy Shin-chan | [`../shinchan_shy.aesl`](../shinchan_shy.aesl) | Explore open space for 8 seconds, draw a small centered-pen cloud, maneuver around slow front obstacles, and use 180°/0°/90° escape variations for first front, rear, and blocked front hazards. |
 | Submission version | [`../shinchan_submit.aesl`](../shinchan_submit.aesl) | WANDER and SHIVER names; the centered-pen cloud at `unit_mm = 20`; 180° turn for the first front escape, no turn for a rear escape, and repeating 90° turns after a blocked front escape. |
+| Rear-pen submission v2 | [`../shinchan_submit_v2.aesl`](../shinchan_submit_v2.aesl) | 20-second curved wander sweeps; 100 mm cloud coordinate scale; pen 45 mm behind axle; continuous reverse-drawn pen-tip arcs. The original submission remains unchanged. |
 | Centered-pen drawing tests | [`../calibration/centered_pen/`](../calibration/centered_pen/) | Turn and shape calibration, cloud semicircles, circle sweep, shy motion, and edge escape. |
 | Offset-pen cloud | [`../calibration/offset_pen/cloud_offset_test.aesl`](../calibration/offset_pen/cloud_offset_test.aesl) | Standalone six-lobe cloud that commands the pen tip along the intended arcs. It does not explore or avoid obstacles. |
 | XIAO communication | [`../xiao_communication/README.md`](../xiao_communication/README.md) | Separate USB, local dashboard, Wi-Fi, and direct USB host experiments. These are not part of the drawing controller. |
@@ -38,7 +39,9 @@ The intended pen path visits `(2,1) → (1,2) → (-1,2) → (-3,1) → (-1,-1) 
 
 For forward offset `f` and right offset `r`, if the axle moves forward at `v` and rotates counterclockwise at `w`, the pen-tip velocity is `(v + r*w)` forward and `f*w` to the left. The offset cloud solves this for wheel commands every 50 ms and tracks heading from those commands. It changes velocity at lobe joins without an in-place pivot. This is open-loop: the script does not measure its actual heading or pen trace. Motor lag, slip, and pen drag can distort the joins and closure. Red means invalid settings or a command outside the script's permitted range; green means the sequence finished.
 
-**Integration gap:** Both `shinchan_shy.aesl` and `shinchan_submit.aesl` draw the centered-pen cloud at `unit_mm = 20` using constant-speed semicircles and in-place clockwise turns. Their pen drawings will shift and make turn marks if the 75/48 offset mount is attached. The standalone offset cloud has not been merged into either shy state machine. The older `shinchan_bot.aesl` and `shinchan_drawings.aesl` also assume a centered pen.
+**Integration gap:** Both `shinchan_shy.aesl` and `shinchan_submit.aesl` draw the centered-pen cloud at `unit_mm = 20` using constant-speed semicircles and in-place clockwise turns. Their pen drawings will shift and make turn marks if the 75/48 offset mount is attached. The standalone offset cloud has not been merged into either original state machine. The older `shinchan_bot.aesl` and `shinchan_drawings.aesl` also assume a centered pen. `shinchan_submit_v2.aesl` adapts that controller separately for the newly specified pen position, 45 mm directly behind the wheel axle.
+
+The v2 cloud uses `pen_behind_mm = 45`, `unit_mm = 100`, `pen_speed_target = 90`, and `t90_ms = 1670`. Reverse motion places the pen ahead of the moving robot. It recomputes wheel commands every 50 ms and continuously estimates heading, so it avoids pivot marks at the six lobe joins. The wander speed is 140, with a 45-unit steering bias that reverses every five seconds and a drawing attempt after 20 seconds. These values are design settings, not measured physical results. XML validation and an ideal differential-drive simulation were run; the robot compiler and physical test were unavailable during this edit.
 
 The submission version starts the same six-arc centered-pen cloud after eight seconds of wandering with a clear path. Timer 1 advances arcs, settling pauses, and turns; a hazard interrupts and abandons the current cloud. A later draw restarts at the first arc. `front_history[3]`, `rear_history[3]`, and `ground_low[2]` group repeated sensor values; tuning parameters remain individually named.
 

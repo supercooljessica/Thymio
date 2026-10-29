@@ -11,6 +11,7 @@ A Thymio that behaves like Shin-chan: it hunts down whoever is nearby, chases th
 | `shinchan_bot.aesl` | **The robot program.** Search, chase, taunt, avoid, and draw underpants when bored. |
 | `shinchan_shy.aesl` | Explore open space, draw small clouds, and escape front, rear, or edge hazards. A blocked front escape retries with 90° turns. |
 | `shinchan_submit.aesl` | Submission version of the shy bot. It calls state 1 WANDER, calls the escape oscillation SHIVER, and draws the centered-pen cloud after eight seconds. Front escapes turn 180° initially, then 90° on blocked retries; rear escapes do not turn. |
+| `shinchan_submit_v2.aesl` | Separate version with 20-second, broader curved wandering sweeps and a larger cloud for a pen 45 mm behind the wheel axle. The cloud is drawn in reverse with 50 ms pen-tip steering and no in-place turns at lobe joins. |
 | `shinchan_drawings.aesl` | Drawing only: a button picks a spiral, a flower or underpants. |
 | `sim_victim.aesl` | A simple wandering robot for Shin-chan to chase in the simulator. |
 | `playgrounds/arena.playground` | Simulator arena: empty 2 × 2 m square, four robot-sized cylinders, Shin-chan in the middle. |
